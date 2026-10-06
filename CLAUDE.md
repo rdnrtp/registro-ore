@@ -181,5 +181,10 @@ Mappa delle celle verificata anche sulla versione di ottobre: invariata.
 - 30 attività dalle righe 4–33 del modello; le righe di personal training
   13–26 ("PT …") hanno unità "sedute", le altre "ore". Da verificare con BV
   come vanno conteggiate davvero le righe PT.
-- Abbinamento attività → settori: `abbinamenti.proposta.json` è una proposta
-  **non ancora confermata**; finché non esiste `abbinamenti.json` non viene caricato.
+- Abbinamento attività → settori in `abbinamenti.json`, confermato il 6/10/2026
+  e caricato (31 abbinamenti; "Pulizie/Manutenzione" sta in due settori).
+  Era una proposta mia accettata senza verifiche: possono essere da rivedere le
+  righe PT, i Corsi nuoto, Compleanni e Corsi formazione. Per cambiarlo:
+  modificare il file e rieseguire `carica-organizzazione`, che sostituisce
+  tutti gli abbinamenti dell'organizzazione. Quando gli abbinamenti saranno
+  modificabili dall'app, rieseguire il comando cancellerebbe quelle modifiche.

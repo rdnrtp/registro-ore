@@ -1,5 +1,5 @@
 {
-  "_nota": "PROPOSTA da confermare. Dopo la conferma va copiata in abbinamenti.json: solo quel file viene caricato. Chiave = nome dell'attività come nel modello, valore = settori di organizzazione.json.",
+  "_nota": "Abbinamento attività -> settori di BV, confermato il 6 ottobre 2026. Chiave = nome dell'attività come nel modello, valore = settori di organizzazione.json. Dopo una modifica rieseguire carica-organizzazione: sostituisce tutti gli abbinamenti dell'organizzazione con quelli di questo file.",
   "Segreteria": ["Segreteria"],
   "Bagnino": ["Bagnini"],
   "Corsi Fit h2o": ["Corsi acqua e palestra"],
