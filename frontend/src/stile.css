@@ -1,0 +1,129 @@
+:root {
+  --colore-principale: #0b6e99;
+  --colore-testo: #1d2730;
+  --colore-secondario: #5b6b78;
+  --colore-sfondo: #f2f5f7;
+  --colore-scheda: #ffffff;
+  --colore-bordo: #c9d3da;
+  --colore-errore: #b42318;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--colore-testo);
+  background: var(--colore-sfondo);
+  -webkit-text-size-adjust: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--colore-sfondo);
+}
+
+.pagina {
+  min-height: 100dvh;
+}
+
+.centrata {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.scheda {
+  width: 100%;
+  max-width: 380px;
+  background: var(--colore-scheda);
+  border-radius: 12px;
+  padding: 24px 20px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+/* 16px evita lo zoom automatico di iOS sui campi di testo. */
+input {
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  padding: 12px;
+  border: 1px solid var(--colore-bordo);
+  border-radius: 8px;
+  min-height: 48px;
+}
+
+input:focus {
+  outline: 2px solid var(--colore-principale);
+  outline-offset: 1px;
+}
+
+button {
+  font: inherit;
+  font-weight: 600;
+  min-height: 48px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--colore-principale);
+  color: #fff;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+}
+
+button.secondario {
+  min-height: 40px;
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgb(255 255 255 / 0.7);
+}
+
+.errore {
+  margin: 0;
+  color: var(--colore-errore);
+}
+
+.barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  background: var(--colore-principale);
+  color: #fff;
+}
+
+.organizzazione {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.contenuto {
+  padding: 24px 16px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.dettaglio {
+  color: var(--colore-secondario);
+  margin: 8px 0 0;
+}

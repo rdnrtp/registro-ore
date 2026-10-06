@@ -1,5 +1,6 @@
 // Crea o aggiorna un'organizzazione a partire da una cartella di configurazione.
-// Uso: npm run carica-organizzazione -- <cartella>   (es. /dati/seed/bv)
+// Uso: npm run carica-organizzazione -- bv
+// (bv = sottocartella di seed/, montata in Docker su /dati/seed)
 //
 // La cartella contiene:
 //   organizzazione.json  slug, nome, posizione delle attività nel modello Excel,
@@ -57,8 +58,10 @@ function verificaNomi(nomi, ammessi, descrizione) {
 }
 
 async function main() {
-  const cartella = process.argv[2];
-  if (!cartella) throw new Error('Uso: npm run carica-organizzazione -- <cartella>   (es. /dati/seed/bv)');
+  const argomento = process.argv[2];
+  if (!argomento) throw new Error('Uso: npm run carica-organizzazione -- <nome cartella in seed>   (es. bv)');
+  // Un nome semplice indica una sottocartella di SEED_DIR (in Docker /dati/seed).
+  const cartella = /[\\/]/.test(argomento) ? argomento : path.join(process.env.SEED_DIR ?? '/dati/seed', argomento);
   const conf = leggiJson(path.join(cartella, 'organizzazione.json'));
   const contatti = leggiJson(path.join(cartella, 'contatti.json'));
   const abbinamenti = leggiJson(path.join(cartella, 'abbinamenti.json'), false);
