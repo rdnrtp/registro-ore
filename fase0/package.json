@@ -1,0 +1,14 @@
+{
+  "name": "fase0",
+  "version": "1.0.0",
+  "description": "Fase 0: prova di fattibilità della generazione Excel con ExcelJS",
+  "main": "genera-excel.js",
+  "scripts": {
+    "prova": "node prova.js"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  },
+  "private": true
+}

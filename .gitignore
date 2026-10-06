@@ -1,0 +1,9 @@
+node_modules/
+
+# Dati reali di BV: il modello contiene indirizzi email reali
+modello/
+fase0/output/
+*.xlsx
+*.xls
+
+.env
