@@ -1,0 +1,15 @@
+{
+  "_nota": "Copia questo file in contatti.json (escluso da git) e inserisci gli indirizzi reali. Le chiavi di 'responsabili' sono i nomi dei settori di organizzazione.json.",
+  "emailInvio": "segreteria@esempio.it",
+  "responsabili": {
+    "Segreteria": ["responsabile.segreteria@esempio.it"],
+    "Corsi palestra": ["responsabile.palestra@esempio.it"],
+    "Corsi acqua": ["responsabile.acqua@esempio.it"],
+    "Sala pesi": ["responsabile.salapesi@esempio.it"],
+    "Danza": ["responsabile.danza@esempio.it"],
+    "Nuoto e Centro estivo": ["primo.responsabile@esempio.it", "secondo.responsabile@esempio.it"],
+    "Manutenzione": ["responsabile.manutenzione@esempio.it"],
+    "Bagnini": ["responsabile.bagnini@esempio.it"],
+    "Pulizie": ["responsabile.pulizie@esempio.it"]
+  }
+}

@@ -1,9 +1,12 @@
 node_modules/
+dist/
 
 # Dati reali di BV: il modello contiene indirizzi email reali
 modello/
 fase0/output/
 *.xlsx
 *.xls
+# Email reali dei responsabili (vedi seed/*/contatti.example.json)
+seed/*/contatti.json
 
 .env

@@ -1,0 +1,71 @@
+name: registro-ore
+
+x-db-env: &db-env
+  PGHOST: db
+  PGPORT: "5432"
+  PGUSER: ${POSTGRES_USER:?manca POSTGRES_USER nel file .env}
+  PGPASSWORD: ${POSTGRES_PASSWORD:?manca POSTGRES_PASSWORD nel file .env}
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?manca POSTGRES_DB nel file .env}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./api
+      target: prod
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *db-env
+      PGDATABASE: ${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET:?manca JWT_SECRET nel file .env}
+      JWT_DURATA_ORE: ${JWT_DURATA_ORE:-168}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      LOGIN_FINESTRA_MINUTI: ${LOGIN_FINESTRA_MINUTI:-15}
+      LOGIN_MAX_FALLITI_PER_EMAIL: ${LOGIN_MAX_FALLITI_PER_EMAIL:-5}
+      LOGIN_MAX_FALLITI_PER_IP: ${LOGIN_MAX_FALLITI_PER_IP:-30}
+    volumes:
+      # Dati privati dell'impianto (fuori da git), letti dai comandi di caricamento.
+      - ./modello:/dati/modello:ro
+      - ./seed:/dati/seed:ro
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+
+  # Test automatici, su un database separato (registro_ore_test) nello stesso
+  # PostgreSQL. Si avvia solo esplicitamente: docker compose run --rm api-test
+  api-test:
+    profiles: ["test"]
+    build:
+      context: ./api
+      target: test
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *db-env
+      PGDATABASE: registro_ore_test
+
+volumes:
+  pgdata:

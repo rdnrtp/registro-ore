@@ -1,0 +1,23 @@
+{
+  "slug": "bv",
+  "nome": "BV",
+  "modello": {
+    "file": "../../modello/modello_bv.xlsx",
+    "foglio": "Foglio1",
+    "colonnaAttivita": "D",
+    "primaRiga": 4,
+    "ultimaRiga": 33
+  },
+  "righeASedute": [13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26],
+  "settori": [
+    "Segreteria",
+    "Corsi palestra",
+    "Corsi acqua",
+    "Sala pesi",
+    "Danza",
+    "Nuoto e Centro estivo",
+    "Manutenzione",
+    "Bagnini",
+    "Pulizie"
+  ]
+}
