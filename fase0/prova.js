@@ -24,8 +24,8 @@ const CASI = [
     dati: {
       anno: 2026, mese: 10, nome: 'Andrea', cognome: 'Petris',
       ore: daOrarioTipo(2026, 10, {
-        LU: [['Segreteria', 4]], MA: [['Agonismo Nuoto', 2]], ME: [['Segreteria', 4]],
-        GI: [['Agonismo Nuoto', 2]], VE: [['Segreteria', 4]],
+        LU: [['Segreteria', 4]], MA: [['NUOTO AGONISTICO', 2]], ME: [['Segreteria', 4]],
+        GI: [['NUOTO AGONISTICO', 2]], VE: [['Segreteria', 4]],
       }),
       pt: [],
     },

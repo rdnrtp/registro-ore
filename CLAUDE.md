@@ -127,7 +127,11 @@ diventerà configurazione dell'organizzazione); prove: `cd fase0 && npm run prov
 - Nome `B4` (unita `B4:B33`), cognome `C4` (unita `C4:C33`), testo ruotato 90°.
 - Giorni 1–31: colonne `E`..`AI`; numero in riga 2, sigla (LU MA ME GI VE SA DO) in riga 3.
 - Attività: `D4:D33`, 30 righe. Il nome nel modello è quello usato per la
-  corrispondenza (es. "Agonismo Nuoto" alla riga 29, non "Nuoto agonistico").
+  corrispondenza. La riga 29 è "NUOTO AGONISTICO": rinominata su richiesta
+  (in origine "Agonismo Nuoto"; copia intatta in `modello/modello_bv.originale.xlsx`).
+  La rinomina ha toccato solo la stringa in `xl/sharedStrings.xml`.
+- Se il nome di una riga cambia nel modello, `carica-organizzazione` rinomina
+  l'attività esistente su quella riga (stesso id), invece di crearne una nuova.
 - Totali per attività: `AJ4:AJ33` sono formule `SUM(E{r}:AI{r})` (in AJ5:AJ33
   come formula condivisa). Totale generale `AJ34` = `SUM(AJ4:AJ33)`.
   `B34:AI34` è unita e vuota.

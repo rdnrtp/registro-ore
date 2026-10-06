@@ -103,6 +103,21 @@ async function main() {
     // Libera temporaneamente le righe del modello, così un'attività può
     // spostarsi su una riga occupata da un'altra senza violare l'unicità.
     await client.query('UPDATE activities SET template_row = template_row + 100000 WHERE organization_id = $1', [orgId]);
+    // Rinomina: se nel database la riga è occupata da un nome che non compare
+    // più nel modello, è la stessa attività con un nome nuovo. Si aggiorna il
+    // nome e l'attività conserva il suo id (e le ore già registrate).
+    const nomiModello = attivita.map((a) => a.nome);
+    for (const a of attivita) {
+      const r = await client.query(
+        `UPDATE activities SET name = $3
+          WHERE organization_id = $1 AND template_row = $2 + 100000
+            AND name <> ALL($4::text[])
+            AND NOT EXISTS (SELECT 1 FROM activities WHERE organization_id = $1 AND name = $3)
+          RETURNING name`,
+        [orgId, a.riga, a.nome, nomiModello],
+      );
+      if (r.rows[0]) console.log(`  Rinominata la riga ${a.riga} in "${a.nome}"`);
+    }
     const idAttivita = new Map();
     for (const a of attivita) {
       const r = await client.query(
