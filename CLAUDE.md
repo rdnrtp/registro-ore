@@ -43,9 +43,19 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   `api-test` (profilo `test`, avviato solo con `docker compose run`).
   Configurazione in `.env` (non tracciato), modello in `.env.example`.
 - `api/`: `src/app.js` (Express), `src/auth.js` (JWT, middleware `autenticato`
-  e `richiediRuolo`), `src/routes/`, `src/cli/` (comandi da terminale),
+  e `richiediRuolo`), `src/routes/` (`auth`, `organizzazione` = attività,
+  settori, utenti; `registro` = ore, orario tipo, mie attività, sedute PT),
+  `src/errori.js` (`ErroreHttp`), `src/validazione.js` (uuid, date, mesi),
+  `src/db.js` (`transazione`), `src/cli/` (comandi da terminale),
   `migrations/NNN_nome.sql`, `test/` (node:test + supertest).
-- `frontend/`: Vite + React, `src/App.jsx` sceglie tra `Login` e `Home`.
+- `frontend/`: Vite + React, nessuna libreria oltre a React. `src/App.jsx`
+  sceglie tra `Login` e `Home`; `Home.jsx` = barra delle sezioni in basso e
+  pagine scelte con l'ancora dell'indirizzo (`#/` = `Mese.jsx`, `#/attivita` =
+  `MieAttivita.jsx`, `#/orario` = `OrarioTipo.jsx`). `SchedaGiorno.jsx` e la
+  precompilazione usano `Foglio.jsx` (pannello dal basso); `EditorQuantita.jsx`
+  (contatori − valore + ) serve sia alla scheda del giorno sia all'orario tipo;
+  `SedutePt.jsx`; `date.js` (date come stringhe 'AAAA-MM-GG', oggi = fuso
+  Europe/Rome); `api.js` (un 401 riporta al login).
 - `seed/<org>/`: configurazione di un'organizzazione per `carica-organizzazione`:
   `organizzazione.json` (tracciato), `contatti.json` (email reali, NON
   tracciato; formato in `contatti.example.json`), `abbinamenti.json`
@@ -62,6 +72,9 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
 - Primo amministratore: `docker compose exec api npm run crea-admin -- --org bv
   --email ... --nome ... --cognome ...` (password chiesta a terminale; serve il
   TTY, quindi niente `-T`).
+- Aprire l'app dal telefono (stessa rete): `http://<IP del PC>:8088`, con una
+  regola del firewall di Windows in entrata per la porta TCP 8088 (profilo
+  Privato).
 - Test: `docker compose run --rm --build api-test` (usa il database
   `registro_ore_test`, creato e azzerato dai test; rifiutano nomi senza `_test`).
 - Sviluppo frontend senza Docker: `cd frontend && npm run dev` (inoltra `/api` a
@@ -83,6 +96,13 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
 - `schedule_templates`: utente, `weekday` 1 = lunedì … 7 = domenica, attività, quantità
 - `month_submissions`: utente, anno, mese, stato ('aperto' | 'inviato'), data di invio
 
+Migrazione `002_inserimento_ore.sql`:
+
+- `user_activities`: le attività scelte dall'utente ("Le mie attività").
+- `organizations.pt_sessions_per_kind`: sedute PT per tipo in un mese = righe
+  del modello (27 per BV); lo imposta `carica-organizzazione` da
+  `modello.righeSedutePt` in `organizzazione.json`.
+
 Chiavi primarie UUID. Ogni tabella con dati di un impianto ha `organization_id`;
 le chiavi esterne tra tabelle dell'organizzazione sono composte
 `(id, organization_id)`, così il database rifiuta collegamenti tra
@@ -102,13 +122,42 @@ mai modificare uno già applicato.
   (express-rate-limit in memoria: va bene con una sola istanza dell'API).
 - `TRUST_PROXY` = numero di proxy davanti all'API (1 = nginx del frontend), serve
   a ricavare l'IP reale per il limite di login.
-- Messaggi di errore in JSON `{ errore: "..." }`, in italiano.
+- Messaggi di errore in JSON `{ errore: "..." }`, in italiano. Nelle rotte si
+  lancia `new ErroreHttp(stato, messaggio)` (Express 5 gestisce le rotte async).
+- Dati personali (ore, orario tipo, mie attività, sedute PT): sempre e solo
+  quelli di `req.utente.id`, anche per l'amministratore; nessuna rotta accetta
+  un utente come parametro. Le viste sugli altri sono della Fase 4.
+- Le modifiche ai dati personali avvengono in `transazione` dopo
+  `SELECT ... FROM users ... FOR NO KEY UPDATE` sulla riga dell'utente: le
+  richieste dello stesso utente vanno in fila, così i controlli (24 ore al
+  giorno, limite sedute, mese inviato) non si aggirano con richieste parallele.
+- Mese con `month_submissions.status = 'inviato'`: ogni modifica di ore e
+  sedute di quel mese risponde 409. Il blocco è nell'API, non nel database.
+
+## API della Fase 2 (`src/routes/registro.js`)
+
+- `GET /api/mese/:anno/:mese` → `{ stato, max_sedute_pt_per_tipo,
+  registrazioni: [{ data, attivita_id, quantita }], sedute_pt: [...] }`.
+- `PUT /api/giorni/:data` `{ voci: [{ attivita_id, quantita }] }`: imposta le
+  attività indicate, lascia le altre; 0 elimina la riga. Ore a passi di 0,5,
+  sedute intere, 0–24 per voce, al massimo 24 ore (solo unità "ore") nel
+  giorno. Un'attività non attiva non accetta righe nuove.
+- `GET|POST /api/mese/:anno/:mese/precompilazione`: anteprima / applicazione
+  dell'orario tipo ai giorni senza nessuna registrazione (le sedute PT non
+  contano). Riempie anche i giorni futuri e i festivi, se l'orario li prevede.
+- `GET|PUT /api/orario-tipo` `{ voci: [{ giorno_settimana: 1..7, attivita_id,
+  quantita }] }`: il PUT sostituisce tutto l'orario.
+- `GET|PUT /api/mie-attivita` `{ attivita: [id] }`: il PUT sostituisce l'elenco.
+- `POST /api/sedute-pt` `{ data, tipo: 'acqua'|'palestra', cliente }`,
+  `DELETE /api/sedute-pt/:id`. Non collegate alle righe "PT …" della griglia.
+- Errori: 400 dati non validi o limiti superati, 404 attività o seduta
+  inesistente o di altri, 409 mese inviato.
 
 ## Fasi
 
 0. Prova di fattibilità Excel — **completata** (vedi sotto)
 1. Fondamenta (struttura, schema, login) — **completata**
-2. Inserimento ore
+2. Inserimento ore — **completata**
 3. Esportazione Excel
 4. Multiutente e ruoli
 5. Chiusura mese, invio email, promemoria
@@ -174,6 +223,8 @@ Mappa delle celle verificata anche sulla versione di ottobre: invariata.
   settembre sono stati eliminati Corsi palestra, Corsi acqua, Danza, Nuoto e
   Centro estivo. L'indirizzo a cui inviare il file (segreteria) è `emailInvio`
   in `contatti.json`.
+- `modello.righeSedutePt` in `organizzazione.json` (righe 6–32) dà il limite
+  di 27 sedute PT per tipo al mese.
 - `carica-organizzazione` elimina dal database i settori non più elencati in
   `organizzazione.json`, con i relativi abbinamenti e responsabili.
 - Se il regolamento cambia: rileggere `B35`, aggiornare `contatti.json` e
