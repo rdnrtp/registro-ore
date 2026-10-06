@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from './api.js';
+import { api, suNonAutenticato } from './api.js';
 import Login from './Login.jsx';
 import Home from './Home.jsx';
 
@@ -8,6 +8,7 @@ export default function App() {
   const [sessione, setSessione] = useState(undefined);
 
   useEffect(() => {
+    suNonAutenticato(() => setSessione(null));
     api
       .io()
       .then(setSessione)

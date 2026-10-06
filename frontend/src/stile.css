@@ -127,3 +127,613 @@ button.secondario {
   color: var(--colore-secondario);
   margin: 8px 0 0;
 }
+
+/* ------------------------------------------------------------ Fase 2 */
+
+:root {
+  --colore-oggi: #e3f1f8;
+  --colore-sabato: #f4f0e6;
+  --colore-domenica: #f8e9e6;
+  --colore-testo-sabato: #8a6d1f;
+  --colore-testo-domenica: #b42318;
+  --colore-conferma: #146c2e;
+  --colore-avviso-sfondo: #fff4d6;
+  --altezza-schede: 60px;
+}
+
+body.bloccato {
+  overflow: hidden;
+}
+
+a {
+  color: var(--colore-principale);
+}
+
+.organizzazione small {
+  display: block;
+  font-weight: 400;
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.con-schede {
+  padding-bottom: calc(var(--altezza-schede) + env(safe-area-inset-bottom));
+}
+
+/* Barra delle sezioni, fissa in basso: a portata di pollice. */
+.schede {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  background: var(--colore-scheda);
+  border-top: 1px solid var(--colore-bordo);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.schede a {
+  flex: 1;
+  min-height: var(--altezza-schede);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 4px;
+  color: var(--colore-secondario);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.schede a[aria-current="page"] {
+  color: var(--colore-principale);
+  box-shadow: inset 0 3px 0 var(--colore-principale);
+}
+
+button.neutro {
+  background: transparent;
+  color: var(--colore-principale);
+  border: 1px solid var(--colore-principale);
+}
+
+button.piccolo {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 0.9rem;
+}
+
+button.collegamento {
+  background: none;
+  color: var(--colore-principale);
+  padding: 0;
+  min-height: 44px;
+  text-decoration: underline;
+}
+
+.riquadro {
+  margin: 12px 16px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--colore-scheda);
+}
+
+.conferma {
+  margin: 0;
+  color: var(--colore-conferma);
+}
+
+.avviso {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--colore-avviso-sfondo);
+}
+
+.suggerimento {
+  margin: 0 0 8px;
+  color: var(--colore-secondario);
+  font-size: 0.9rem;
+}
+
+.caricamento {
+  padding: 24px 16px;
+  color: var(--colore-secondario);
+}
+
+/* ---------------------------------------------------- Vista del mese */
+
+.mese {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.testata-mese {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--colore-sfondo);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--colore-bordo);
+}
+
+.navigazione-mese {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.navigazione-mese h1 {
+  font-size: 1.3rem;
+  text-align: center;
+}
+
+button.freccia {
+  width: 48px;
+  padding: 0;
+  font-size: 1.8rem;
+  line-height: 1;
+  background: transparent;
+  color: var(--colore-principale);
+}
+
+.azioni-mese {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.riassunto {
+  flex: 1;
+  color: var(--colore-secondario);
+}
+
+.giorni {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+}
+
+.giorno {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-radius: 0;
+  border-bottom: 1px solid var(--colore-bordo);
+  background: var(--colore-scheda);
+  color: var(--colore-testo);
+  font-weight: 400;
+  text-align: left;
+}
+
+.giorno.sabato {
+  background: var(--colore-sabato);
+}
+
+.giorno.domenica {
+  background: var(--colore-domenica);
+}
+
+.giorno.oggi {
+  background: var(--colore-oggi);
+  box-shadow: inset 6px 0 0 var(--colore-principale);
+}
+
+.giorno-data {
+  flex: 0 0 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+}
+
+.giorno-numero {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.giorno-settimana {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  color: var(--colore-secondario);
+}
+
+.sabato .giorno-settimana {
+  color: var(--colore-testo-sabato);
+  font-weight: 700;
+}
+
+.domenica .giorno-settimana,
+.domenica .giorno-numero {
+  color: var(--colore-testo-domenica);
+  font-weight: 700;
+}
+
+.oggi .giorno-numero,
+.oggi .giorno-settimana {
+  color: var(--colore-principale);
+  font-weight: 700;
+}
+
+.giorno-voci {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  font-size: 0.9rem;
+}
+
+.voce {
+  background: rgb(11 110 153 / 0.08);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.vuoto {
+  color: var(--colore-secondario);
+}
+
+.giorno-totale {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sezione {
+  margin: 16px;
+  padding: 16px;
+  background: var(--colore-scheda);
+  border-radius: 12px;
+}
+
+.sezione h2 {
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+}
+
+.totali {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.totali th,
+.totali td {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--colore-bordo);
+}
+
+.totali th {
+  text-align: left;
+  font-weight: 400;
+}
+
+.totali td {
+  text-align: right;
+  white-space: nowrap;
+  padding-left: 12px;
+}
+
+.totali tfoot th,
+.totali tfoot td {
+  font-weight: 700;
+  border-bottom: none;
+}
+
+.totali small {
+  font-weight: 400;
+  color: var(--colore-secondario);
+}
+
+/* ------------------------------------------- Sedute personal training */
+
+.contatori-pt {
+  display: flex;
+  gap: 16px;
+  margin: 0 0 12px;
+}
+
+.contatori-pt .esaurito {
+  color: var(--colore-errore);
+}
+
+.form-pt {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.scelta {
+  display: flex;
+  gap: 8px;
+}
+
+.scelta button {
+  flex: 1;
+  background: transparent;
+  color: var(--colore-principale);
+  border: 1px solid var(--colore-principale);
+}
+
+.scelta button.scelto {
+  background: var(--colore-principale);
+  color: #fff;
+}
+
+.elenco-pt {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+}
+
+.elenco-pt li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--colore-bordo);
+}
+
+.pt-data {
+  flex: 0 0 56px;
+  font-weight: 600;
+}
+
+.pt-tipo {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #e0eef5;
+}
+
+.pt-tipo.palestra {
+  background: #ece6f5;
+}
+
+.pt-cliente {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+button.elimina {
+  min-height: 44px;
+  width: 44px;
+  padding: 0;
+  font-size: 1.5rem;
+  background: transparent;
+  color: var(--colore-errore);
+}
+
+/* ------------------------------------------------- Foglio a comparsa */
+
+.sfondo-foglio {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgb(0 0 0 / 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.foglio {
+  width: 100%;
+  max-width: 640px;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--colore-scheda);
+  border-radius: 16px 16px 0 0;
+}
+
+.foglio-testa {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 8px 8px 16px;
+  border-bottom: 1px solid var(--colore-bordo);
+}
+
+.foglio-testa h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+button.chiudi {
+  width: 48px;
+  padding: 0;
+  font-size: 1.8rem;
+  background: transparent;
+  color: var(--colore-secondario);
+}
+
+.foglio-corpo {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 16px;
+}
+
+.foglio-piede {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--colore-bordo);
+}
+
+.foglio-piede p {
+  margin: 0;
+}
+
+.pulsanti {
+  display: flex;
+  gap: 8px;
+}
+
+.pulsanti button {
+  flex: 1;
+}
+
+.elenco-date {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  columns: 2;
+}
+
+/* --------------------------------------------- Contatori delle quantità */
+
+.righe-quantita {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.riga-quantita {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--colore-bordo);
+}
+
+.riga-quantita.con-valore .riga-nome {
+  font-weight: 700;
+}
+
+.riga-nome {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.riga-nome small {
+  display: block;
+  font-weight: 400;
+  color: var(--colore-secondario);
+}
+
+.contatore {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.contatore button {
+  width: 52px;
+  min-height: 52px;
+  padding: 0;
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.contatore select {
+  width: 64px;
+  min-height: 52px;
+  font: inherit;
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-align: center;
+  text-align-last: center;
+  border: 1px solid var(--colore-bordo);
+  border-radius: 8px;
+  background: var(--colore-scheda);
+  color: var(--colore-testo);
+  appearance: none;
+}
+
+.totale-giorno {
+  font-size: 1.05rem;
+}
+
+/* ------------------------------------- Le mie attività e orario tipo */
+
+.contenuto h1 + .dettaglio {
+  margin-bottom: 16px;
+}
+
+.scelte-attivita {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+.scelte-attivita label {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 4px 12px;
+  margin-bottom: 4px;
+  font-weight: 400;
+  background: var(--colore-scheda);
+  border-radius: 8px;
+}
+
+.scelte-attivita label.scelta-attiva {
+  font-weight: 700;
+  box-shadow: inset 0 0 0 2px var(--colore-principale);
+}
+
+.scelte-attivita input {
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.scelte-attivita span {
+  flex: 1;
+}
+
+.scelte-attivita small {
+  color: var(--colore-secondario);
+  font-weight: 400;
+}
+
+.barra-salva {
+  position: sticky;
+  bottom: calc(var(--altezza-schede) + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  background: var(--colore-sfondo);
+}
+
+.barra-salva p {
+  margin: 0;
+}
+
+.giorno-tipo {
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  background: var(--colore-scheda);
+  border-radius: 12px;
+}
+
+.giorno-tipo.fine-settimana {
+  background: var(--colore-sabato);
+}
+
+.giorno-tipo h2 {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+}
+
+.giorno-tipo h2 span {
+  font-weight: 400;
+  color: var(--colore-secondario);
+}
+
+.giorno-tipo h2 span.errore {
+  color: var(--colore-errore);
+  font-weight: 700;
+}
