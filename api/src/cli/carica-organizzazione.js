@@ -3,8 +3,9 @@
 // (bv = sottocartella di seed/, montata in Docker su /dati/seed)
 //
 // La cartella contiene:
-//   organizzazione.json  slug, nome, posizione delle attività nel modello Excel,
-//                        righe a "sedute", elenco dei settori (tracciato);
+//   organizzazione.json  slug, nome, posizione delle attività e delle sedute di
+//                        personal training nel modello Excel, righe a "sedute",
+//                        elenco dei settori (tracciato);
 //                        i settori del database assenti dall'elenco vengono eliminati
 //   contatti.json        email di invio e dei responsabili (NON tracciato)
 //   abbinamenti.json     attività -> settori; se manca gli abbinamenti non
@@ -67,6 +68,9 @@ async function main() {
   const contatti = leggiJson(path.join(cartella, 'contatti.json'));
   const abbinamenti = leggiJson(path.join(cartella, 'abbinamenti.json'), false);
   const attivita = await leggiAttivita(cartella, conf);
+  const righePt = conf.modello.righeSedutePt;
+  if (!righePt || !(righePt.ultima >= righePt.prima)) throw new Error('modello.righeSedutePt mancante o non valido');
+  const sedutePtPerTipo = righePt.ultima - righePt.prima + 1;
 
   const settori = new Set(conf.settori);
   verificaNomi(Object.keys(contatti.responsabili ?? {}), settori, 'Settori in contatti.json');
@@ -82,10 +86,11 @@ async function main() {
   try {
     await client.query('BEGIN');
     const org = await client.query(
-      `INSERT INTO organizations (slug, name, submission_email) VALUES ($1, $2, $3)
-       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, submission_email = EXCLUDED.submission_email
+      `INSERT INTO organizations (slug, name, submission_email, pt_sessions_per_kind) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, submission_email = EXCLUDED.submission_email,
+                                        pt_sessions_per_kind = EXCLUDED.pt_sessions_per_kind
        RETURNING id`,
-      [conf.slug, conf.nome, contatti.emailInvio ?? null],
+      [conf.slug, conf.nome, contatti.emailInvio ?? null, sedutePtPerTipo],
     );
     const orgId = org.rows[0].id;
 
@@ -162,6 +167,7 @@ async function main() {
     console.log(`  Settori: ${idSettore.size}`);
     for (const r of rimossi.rows) console.log(`  Settore eliminato: "${r.name}"`);
     console.log(`  Attività: ${attivita.length} (${attivita.length - nSedute} a ore, ${nSedute} a sedute)`);
+    console.log(`  Sedute di personal training per tipo in un mese: al massimo ${sedutePtPerTipo}`);
     console.log(
       abbinamenti
         ? `  Abbinamenti attività-settori: ${Object.values(abbinamenti).flat().length}`

@@ -51,6 +51,30 @@ describe('isolamento tra organizzazioni', () => {
     assert.equal((await adminB.get(`/api/attivita/${A.attivitaOre}`)).status, 404);
   });
 
+  it("registrazioni e sedute: gli identificativi di B rispondono 404", async () => {
+    const collabB = await accedi(app, B.collaboratore.email);
+    const sedutaB = await collabB.post('/api/sedute-pt').send({ data: '2026-10-02', tipo: 'acqua', cliente: 'Cliente B' });
+    assert.equal(sedutaB.status, 201);
+    for (const agente of [adminA, collabA]) {
+      const elimina = await agente.delete(`/api/sedute-pt/${sedutaB.body.id}`);
+      assert.equal(elimina.status, 404);
+      assert.deepEqual(elimina.body, { errore: 'Non trovato' });
+      const ore = await agente.put('/api/giorni/2026-10-02').send({ voci: [{ attivita_id: B.attivitaOre, quantita: 1 }] });
+      assert.equal(ore.status, 404);
+      const orario = await agente
+        .put('/api/orario-tipo')
+        .send({ voci: [{ giorno_settimana: 1, attivita_id: B.attivitaOre, quantita: 1 }] });
+      assert.equal(orario.status, 404);
+      assert.equal((await agente.put('/api/mie-attivita').send({ attivita: [B.attivitaSedute] })).status, 404);
+      assert.equal((await agente.delete('/api/sedute-pt/123')).status, 404);
+    }
+    const meseB = (await collabB.get('/api/mese/2026/10')).body;
+    assert.equal(meseB.sedute_pt.length, 1);
+    assert.deepEqual((await collabA.get('/api/mese/2026/10')).body.sedute_pt, []);
+    const { rows } = await pool.query('SELECT count(*)::int AS n FROM time_entries');
+    assert.equal(rows[0].n, 0);
+  });
+
   it("l'organizzazione indicata nella richiesta viene ignorata", async () => {
     const tentativi = [
       adminA.get(`/api/attivita?organization_id=${B.id}&org=${B.id}`),

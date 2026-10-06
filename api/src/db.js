@@ -10,4 +10,20 @@ function creaPool(opzioni = {}) {
   return new Pool({ max: 10, ...opzioni });
 }
 
-module.exports = { creaPool };
+// Esegue fn(client) in una transazione: COMMIT se termina, ROLLBACK se lancia.
+async function transazione(pool, fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const risultato = await fn(client);
+    await client.query('COMMIT');
+    return risultato;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { creaPool, transazione };

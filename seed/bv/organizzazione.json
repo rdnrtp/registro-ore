@@ -6,7 +6,8 @@
     "foglio": "Foglio1",
     "colonnaAttivita": "D",
     "primaRiga": 4,
-    "ultimaRiga": 33
+    "ultimaRiga": 33,
+    "righeSedutePt": { "prima": 6, "ultima": 32 }
   },
   "righeASedute": [13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26],
   "settori": [

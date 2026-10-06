@@ -21,6 +21,10 @@ describe('accesso senza token valido', () => {
     `/api/settori/${A.settore}`,
     '/api/utenti',
     `/api/utenti/${A.admin.id}`,
+    '/api/mese/2026/10',
+    '/api/mese/2026/10/precompilazione',
+    '/api/orario-tipo',
+    '/api/mie-attivita',
   ];
 
   it('senza cookie ogni rotta protetta risponde 401', async () => {
@@ -28,6 +32,18 @@ describe('accesso senza token valido', () => {
       const res = await request(app).get(rotta);
       assert.equal(res.status, 401, rotta);
     }
+  });
+
+  it('senza cookie le rotte di modifica rispondono 401', async () => {
+    const tentativi = [
+      request(app).put('/api/giorni/2026-10-01').send({ voci: [{ attivita_id: A.attivitaOre, quantita: 1 }] }),
+      request(app).post('/api/mese/2026/10/precompilazione'),
+      request(app).put('/api/orario-tipo').send({ voci: [] }),
+      request(app).put('/api/mie-attivita').send({ attivita: [] }),
+      request(app).post('/api/sedute-pt').send({ data: '2026-10-01', tipo: 'acqua', cliente: 'C' }),
+      request(app).delete('/api/sedute-pt/00000000-0000-0000-0000-000000000000'),
+    ];
+    for (const res of await Promise.all(tentativi)) assert.equal(res.status, 401, res.req.path);
   });
 
   it('il token nell\'header Authorization non viene accettato', async () => {
