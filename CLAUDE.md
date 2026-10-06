@@ -120,16 +120,26 @@ Lavora una fase alla volta e fermati alla fine di ciascuna per il resoconto.
 ## Modello Excel di BV (verificato in Fase 0)
 
 File: `modello/modello_bv.xlsx` (non tracciato), un solo foglio `Foglio1`.
+Versione in uso: quella di **ottobre 2026** fornita da BV. Copie di sicurezza
+datate, da non modificare: `modello/modello_bv.2026-09.xlsx` (settembre) e
+`modello/modello_bv.2026-10.xlsx` (identica a quella in uso).
 Prototipo del generatore: `fase0/genera-excel.js` (`LAYOUT_BV` è la mappa che
 diventerà configurazione dell'organizzazione); prove: `cd fase0 && npm run prova`.
+Mappa delle celle verificata anche sulla versione di ottobre: invariata.
 
-- Mese: `B2`, area unita `B2:C3`, testo (es. "Settembre").
+- Mese: `B2`, area unita `B2:C3`, testo. Nel file di ottobre di BV dice ancora
+  "Settembre" mentre le sigle sono di ottobre: errore di BV, il generatore
+  riscrive comunque mese e sigle.
 - Nome `B4` (unita `B4:B33`), cognome `C4` (unita `C4:C33`), testo ruotato 90°.
 - Giorni 1–31: colonne `E`..`AI`; numero in riga 2, sigla (LU MA ME GI VE SA DO) in riga 3.
+  Nella riga 3 caratteri (Calibri/Arial) e bordi sinistri non sono uniformi
+  tra le celle: è così nel modello di BV e va lasciato com'è.
 - Attività: `D4:D33`, 30 righe. Il nome nel modello è quello usato per la
-  corrispondenza. La riga 29 è "NUOTO AGONISTICO": rinominata su richiesta
-  (in origine "Agonismo Nuoto"; copia intatta in `modello/modello_bv.originale.xlsx`).
-  La rinomina ha toccato solo la stringa in `xl/sharedStrings.xml`.
+  corrispondenza. La riga 29 è "NUOTO AGONISTICO" (a settembre era "Agonismo Nuoto").
+- Differenze di ottobre rispetto a settembre, accettate: righe 4–33 alte 14,1
+  (erano 15), righe 35–49 alte 15,95 (erano 20,25; il regolamento si legge
+  comunque per intero), colonna A più stretta, nessun file di impostazioni
+  stampante (formato, orientamento, scala e margini invariati).
 - Se il nome di una riga cambia nel modello, `carica-organizzazione` rinomina
   l'attività esistente su quella riga (stesso id), invece di crearne una nuova.
 - Totali per attività: `AJ4:AJ33` sono formule `SUM(E{r}:AI{r})` (in AJ5:AJ33
@@ -158,10 +168,16 @@ diventerà configurazione dell'organizzazione); prove: `cd fase0 && npm run prov
 
 ## Dati di BV (`seed/bv/`)
 
-- 9 settori, dal regolamento in `B35`: Segreteria, Corsi palestra, Corsi acqua,
-  Sala pesi, Danza, Nuoto e Centro estivo (2 responsabili), Manutenzione,
-  Bagnini, Pulizie. L'indirizzo a cui inviare il file (segreteria) è
-  `emailInvio` in `contatti.json`.
+- 8 settori, dal regolamento in `B35` del modello di ottobre 2026, con i nomi
+  esatti: Segreteria, Corsi acqua e palestra, Sala pesi, Danza e centro estivo,
+  Nuoto, Manutenzione, Bagnini, Pulizie (un responsabile ciascuno). Rispetto a
+  settembre sono stati eliminati Corsi palestra, Corsi acqua, Danza, Nuoto e
+  Centro estivo. L'indirizzo a cui inviare il file (segreteria) è `emailInvio`
+  in `contatti.json`.
+- `carica-organizzazione` elimina dal database i settori non più elencati in
+  `organizzazione.json`, con i relativi abbinamenti e responsabili.
+- Se il regolamento cambia: rileggere `B35`, aggiornare `contatti.json` e
+  l'elenco `settori` in `organizzazione.json`, poi rieseguire il caricamento.
 - 30 attività dalle righe 4–33 del modello; le righe di personal training
   13–26 ("PT …") hanno unità "sedute", le altre "ore". Da verificare con BV
   come vanno conteggiate davvero le righe PT.

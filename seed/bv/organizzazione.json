@@ -11,11 +11,10 @@
   "righeASedute": [13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26],
   "settori": [
     "Segreteria",
-    "Corsi palestra",
-    "Corsi acqua",
+    "Corsi acqua e palestra",
     "Sala pesi",
-    "Danza",
-    "Nuoto e Centro estivo",
+    "Danza e centro estivo",
+    "Nuoto",
     "Manutenzione",
     "Bagnini",
     "Pulizie"

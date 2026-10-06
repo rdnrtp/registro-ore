@@ -4,7 +4,8 @@
 //
 // La cartella contiene:
 //   organizzazione.json  slug, nome, posizione delle attività nel modello Excel,
-//                        righe a "sedute", elenco dei settori (tracciato)
+//                        righe a "sedute", elenco dei settori (tracciato);
+//                        i settori del database assenti dall'elenco vengono eliminati
 //   contatti.json        email di invio e dei responsabili (NON tracciato)
 //   abbinamenti.json     attività -> settori; se manca gli abbinamenti non
 //                        vengono toccati (tracciato, solo dopo conferma)
@@ -99,6 +100,12 @@ async function main() {
       );
       idSettore.set(nome, r.rows[0].id);
     }
+    // I settori non più elencati vanno eliminati, con i loro collegamenti ad
+    // attività e responsabili (ON DELETE CASCADE).
+    const rimossi = await client.query(
+      'DELETE FROM sectors WHERE organization_id = $1 AND name <> ALL($2::text[]) RETURNING name',
+      [orgId, conf.settori],
+    );
 
     // Libera temporaneamente le righe del modello, così un'attività può
     // spostarsi su una riga occupata da un'altra senza violare l'unicità.
@@ -153,6 +160,7 @@ async function main() {
     const nSedute = attivita.filter((a) => a.unita === 'sedute').length;
     console.log(`Organizzazione "${conf.nome}" (${conf.slug}) caricata.`);
     console.log(`  Settori: ${idSettore.size}`);
+    for (const r of rimossi.rows) console.log(`  Settore eliminato: "${r.name}"`);
     console.log(`  Attività: ${attivita.length} (${attivita.length - nSedute} a ore, ${nSedute} a sedute)`);
     console.log(
       abbinamenti
