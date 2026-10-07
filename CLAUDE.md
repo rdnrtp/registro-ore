@@ -44,7 +44,9 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   Configurazione in `.env` (non tracciato), modello in `.env.example`.
 - `api/`: `src/app.js` (Express), `src/auth.js` (JWT, middleware `autenticato`
   e `richiediRuolo`), `src/routes/` (`auth`, `organizzazione` = attività,
-  settori, utenti; `registro` = ore, orario tipo, mie attività, sedute PT),
+  settori, utenti; `registro` = ore, orario tipo, mie attività, sedute PT;
+  `esportazione` = file Excel del mese), `src/excel/` (`layout.js` = mappa
+  delle celle e sua validazione, `foglio-mensile.js` = generatore),
   `src/errori.js` (`ErroreHttp`), `src/validazione.js` (uuid, date, mesi),
   `src/db.js` (`transazione`), `src/cli/` (comandi da terminale),
   `migrations/NNN_nome.sql`, `test/` (node:test + supertest).
@@ -55,20 +57,22 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   precompilazione usano `Foglio.jsx` (pannello dal basso); `EditorQuantita.jsx`
   (contatori − valore + ) serve sia alla scheda del giorno sia all'orario tipo;
   `SedutePt.jsx`; `date.js` (date come stringhe 'AAAA-MM-GG', oggi = fuso
-  Europe/Rome); `api.js` (un 401 riporta al login).
+  Europe/Rome); `api.js` (un 401 riporta al login; `excelMese` scarica il
+  file come blob). Il pulsante "Scarica Excel" è in `Mese.jsx`.
 - `seed/<org>/`: configurazione di un'organizzazione per `carica-organizzazione`:
   `organizzazione.json` (tracciato), `contatti.json` (email reali, NON
   tracciato; formato in `contatti.example.json`), `abbinamenti.json`
   (attività → settori; se manca gli abbinamenti non vengono caricati).
-  Montata nel container `api` in `/dati/seed`; `modello/` in `/dati/modello`.
-- `fase0/`: prototipo del generatore Excel, da integrare nella Fase 3.
+  Montata nel container `api` in `/dati/seed`; `modello/` in `/dati/modello`
+  (anche in `api-test`, per i test dell'esportazione).
 
 ## Comandi (da PowerShell, nella radice del progetto)
 
 - Avvio: `docker compose up -d --build` → http://localhost:8088 (`HTTP_PORT`).
 - Migrazioni: `docker compose exec api npm run migra`
 - Carica/aggiorna BV: `docker compose exec api npm run carica-organizzazione -- bv`
-  (rieseguibile; legge le attività dal modello Excel).
+  (rieseguibile; legge le attività dal modello Excel e salva modello + mappa
+  nel database, con una nuova versione solo se sono cambiati).
 - Primo amministratore: `docker compose exec api npm run crea-admin -- --org bv
   --email ... --nome ... --cognome ...` (password chiesta a terminale; serve il
   TTY, quindi niente `-T`).
@@ -77,6 +81,7 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   Privato).
 - Test: `docker compose run --rm --build api-test` (usa il database
   `registro_ore_test`, creato e azzerato dai test; rifiutano nomi senza `_test`).
+  I test dell'esportazione richiedono `modello/modello_bv.xlsx` sul PC.
 - Sviluppo frontend senza Docker: `cd frontend && npm run dev` (inoltra `/api` a
   `API_URL`, predefinito http://localhost:3000).
 
@@ -100,8 +105,16 @@ Migrazione `002_inserimento_ore.sql`:
 
 - `user_activities`: le attività scelte dall'utente ("Le mie attività").
 - `organizations.pt_sessions_per_kind`: sedute PT per tipo in un mese = righe
-  del modello (27 per BV); lo imposta `carica-organizzazione` da
-  `modello.righeSedutePt` in `organizzazione.json`.
+  del modello (27 per BV); lo imposta `carica-organizzazione` dalla mappa
+  (`modello.sedutePt.primaRiga..ultimaRiga` in `organizzazione.json`). Va
+  tenuto allineato a ogni nuovo modello caricato (anche dall'app, Fase 4).
+
+Migrazione `003_modello_excel.sql`:
+
+- `excel_templates`: modello Excel dell'organizzazione = file (`bytea`) +
+  mappa delle celle (`layout` jsonb) nella stessa riga, con `version`
+  crescente per organizzazione; quello in uso è la versione più alta. Le
+  versioni vecchie restano. `sha256` del file per riconoscere i duplicati.
 
 Chiavi primarie UUID. Ogni tabella con dati di un impianto ha `organization_id`;
 le chiavi esterne tra tabelle dell'organizzazione sono composte
@@ -153,12 +166,41 @@ mai modificare uno già applicato.
 - Errori: 400 dati non validi o limiti superati, 404 attività o seduta
   inesistente o di altri, 409 mese inviato.
 
+## Esportazione Excel (Fase 3, `src/routes/esportazione.js`, `src/excel/`)
+
+- `GET /api/mese/:anno/:mese/excel` → file `.xlsx` del mese dell'utente
+  autenticato (`Content-Disposition: attachment`, `Cache-Control: no-store`),
+  per mesi aperti e inviati. Letture in una transazione REPEATABLE READ.
+  Errori: 400 mese non valido, 503 organizzazione senza modello, 500 se il
+  modello non corrisponde ai dati (`ErroreModello`, messaggio esplicito).
+- Il modello Excel sta nel database (`excel_templates`), non su disco: l'API
+  non legge mai `modello/`. Lo carica `carica-organizzazione`; nella Fase 4
+  lo caricherà l'amministratore dall'app (nuova riga con `version` + 1, da
+  validare con `validaLayout` e una prova di generazione come fa il comando).
+- Mappa delle celle: chiave `modello` di `organizzazione.json` (tutto tranne
+  `file`), formato e controlli in `src/excel/layout.js`. Contiene anche i nomi
+  dei mesi, le sigle dei giorni e lo schema del nome del file
+  (`{MM}_{MESE}_{AAAA}_{COGNOME}.xlsx`; spazi e caratteri vietati → `_`).
+- Corrispondenza attività → riga: `activities.template_row`; il generatore
+  verifica che nel modello quella riga abbia esattamente il nome
+  dell'attività, altrimenti si rifiuta di generare il file.
+- Le attività a sedute scrivono il numero di sedute nella loro riga. Il totale
+  generale del modello (`AJ34`) somma tutte le righe, quindi = ore + sedute
+  delle righe "PT …": diverso dal "Totale ore" dell'app quando nel mese ci
+  sono sedute registrate nella griglia. Le sedute PT con nome cliente (tabelle
+  a destra) non entrano in nessun totale. Da chiarire con BV.
+- Sedute PT nelle tabelle in ordine di data (a parità, di inserimento), data
+  come data Excel con formato `dd/mm/yyyy`.
+- Test: `test/excel.test.js` genera e rilegge i file sul modello reale di BV
+  e li confronta con il modello (celle unite, larghezze, altezze, stampa,
+  stili cella per cella, regolamento, `fullCalcOnLoad`).
+
 ## Fasi
 
 0. Prova di fattibilità Excel — **completata** (vedi sotto)
 1. Fondamenta (struttura, schema, login) — **completata**
 2. Inserimento ore — **completata**
-3. Esportazione Excel
+3. Esportazione Excel — **completata**
 4. Multiutente e ruoli
 5. Chiusura mese, invio email, promemoria
 6. Stabilità e deploy sul VPS
@@ -172,9 +214,11 @@ File: `modello/modello_bv.xlsx` (non tracciato), un solo foglio `Foglio1`.
 Versione in uso: quella di **ottobre 2026** fornita da BV. Copie di sicurezza
 datate, da non modificare: `modello/modello_bv.2026-09.xlsx` (settembre) e
 `modello/modello_bv.2026-10.xlsx` (identica a quella in uso).
-Prototipo del generatore: `fase0/genera-excel.js` (`LAYOUT_BV` è la mappa che
-diventerà configurazione dell'organizzazione); prove: `cd fase0 && npm run prova`.
-Mappa delle celle verificata anche sulla versione di ottobre: invariata.
+La mappa delle celle qui sotto è in `seed/bv/organizzazione.json` (chiave
+`modello`); il prototipo della Fase 0 è stato rimosso e i suoi controlli sono
+in `api/test/excel.test.js`. Mappa verificata anche sulla versione di ottobre:
+invariata. Dopo aver cambiato il file del modello o la mappa: rieseguire
+`carica-organizzazione` (crea una nuova versione nel database).
 
 - Mese: `B2`, area unita `B2:C3`, testo. Nel file di ottobre di BV dice ancora
   "Settembre" mentre le sigle sono di ottobre: errore di BV, il generatore
@@ -223,7 +267,7 @@ Mappa delle celle verificata anche sulla versione di ottobre: invariata.
   settembre sono stati eliminati Corsi palestra, Corsi acqua, Danza, Nuoto e
   Centro estivo. L'indirizzo a cui inviare il file (segreteria) è `emailInvio`
   in `contatti.json`.
-- `modello.righeSedutePt` in `organizzazione.json` (righe 6–32) dà il limite
+- `modello.sedutePt` in `organizzazione.json` (righe 6–32) dà il limite
   di 27 sedute PT per tipo al mese.
 - `carica-organizzazione` elimina dal database i settori non più elencati in
   `organizzazione.json`, con i relativi abbinamenti e responsabili.
