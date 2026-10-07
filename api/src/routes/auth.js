@@ -35,11 +35,14 @@ function rotteAuth({ pool, config }) {
       return res.status(400).json({ errore: 'Inserisci email e password' });
     }
     const { rows } = await pool.query(
-      'SELECT id, organization_id, role, password_hash, active FROM users WHERE email = $1',
+      'SELECT id, organization_id, role, password_hash, token_version, active FROM users WHERE email = $1',
       [normalizzaEmail(email)],
     );
     const utente = rows[0];
-    const valida = await verificaPassword(password, utente ? utente.password_hash : await hashFittizio);
+    // Senza password (invito non ancora usato) il confronto avviene comunque,
+    // con l'hash fittizio, e fallisce.
+    const hash = utente?.password_hash ?? (await hashFittizio);
+    const valida = (await verificaPassword(password, hash)) && Boolean(utente?.password_hash);
     if (!utente || !valida || !utente.active) {
       return res.status(401).json({ errore: 'Email o password non corretti' });
     }
@@ -52,7 +55,7 @@ function rotteAuth({ pool, config }) {
     res.json({ ok: true });
   });
 
-  router.get('/me', autenticato(config), async (req, res) => {
+  router.get('/me', autenticato(pool, config), async (req, res) => {
     const { rows } = await pool.query(
       `SELECT u.id, u.email, u.first_name, u.last_name, u.role,
               o.id AS org_id, o.name AS org_name, o.slug AS org_slug
@@ -66,8 +69,16 @@ function rotteAuth({ pool, config }) {
       return res.status(401).json({ errore: 'Utente non più attivo' });
     }
     const u = rows[0];
+    // Settori di cui è responsabile (vuoto per gli altri ruoli).
+    const settori = await pool.query(
+      `SELECT s.id, s.name AS nome FROM sector_managers m
+         JOIN sectors s ON s.id = m.sector_id AND s.organization_id = m.organization_id
+        WHERE m.user_id = $1 AND m.organization_id = $2 AND $3 = 'responsabile'
+        ORDER BY s.sort_order, s.name`,
+      [u.id, req.utente.organizzazioneId, u.role],
+    );
     res.json({
-      utente: { id: u.id, email: u.email, nome: u.first_name, cognome: u.last_name, ruolo: u.role },
+      utente: { id: u.id, email: u.email, nome: u.first_name, cognome: u.last_name, ruolo: u.role, settori: settori.rows },
       organizzazione: { id: u.org_id, nome: u.org_name, slug: u.org_slug },
     });
   });

@@ -1,5 +1,4 @@
 const express = require('express');
-const { autenticato, richiediRuolo } = require('../auth');
 const { isUuid } = require('../validazione');
 
 // Dati di configurazione dell'organizzazione dell'utente autenticato. Ogni
@@ -7,12 +6,11 @@ const { isUuid } = require('../validazione');
 // organizzazione produce semplicemente "non trovato".
 function rotteOrganizzazione({ pool, config }) {
   const router = express.Router();
-  router.use(autenticato(config));
 
   const nonTrovato = (res) => res.status(404).json({ errore: 'Non trovato' });
 
   const SELECT_ATTIVITA = `
-    SELECT a.id, a.name AS nome, a.unit AS unita, a.template_row AS riga_modello,
+    SELECT a.id, a.name AS nome, a.template_label AS nome_modello, a.unit AS unita, a.template_row AS riga_modello,
            a.sort_order AS ordine, a.active AS attiva,
            COALESCE(array_agg(s.id ORDER BY s.sort_order) FILTER (WHERE s.id IS NOT NULL), '{}') AS settori
       FROM activities a
@@ -38,10 +36,12 @@ function rotteOrganizzazione({ pool, config }) {
     res.json(rows[0]);
   });
 
-  // Le email dei responsabili sono visibili solo agli amministratori.
+  // Email e utenti responsabili sono visibili solo agli amministratori.
   const colonneSettore = (req) =>
     req.utente.ruolo === 'amministratore'
-      ? 'id, name AS nome, sort_order AS ordine, manager_emails AS email_responsabili'
+      ? `id, name AS nome, sort_order AS ordine, manager_emails AS email_responsabili,
+         COALESCE((SELECT array_agg(m.user_id) FROM sector_managers m
+                    WHERE m.sector_id = sectors.id AND m.organization_id = sectors.organization_id), '{}') AS responsabili`
       : 'id, name AS nome, sort_order AS ordine';
 
   router.get('/settori', async (req, res) => {
@@ -58,27 +58,6 @@ function rotteOrganizzazione({ pool, config }) {
       `SELECT ${colonneSettore(req)} FROM sectors WHERE organization_id = $1 AND id = $2`,
       [req.utente.organizzazioneId, req.params.id],
     );
-    if (!rows[0]) return nonTrovato(res);
-    res.json(rows[0]);
-  });
-
-  const SELECT_UTENTE = `
-    SELECT id, email, first_name AS nome, last_name AS cognome, role AS ruolo, active AS attivo
-      FROM users WHERE organization_id = $1`;
-
-  router.get('/utenti', richiediRuolo('amministratore'), async (req, res) => {
-    const { rows } = await pool.query(`${SELECT_UTENTE} ORDER BY last_name, first_name`, [
-      req.utente.organizzazioneId,
-    ]);
-    res.json(rows);
-  });
-
-  router.get('/utenti/:id', richiediRuolo('amministratore'), async (req, res) => {
-    if (!isUuid(req.params.id)) return nonTrovato(res);
-    const { rows } = await pool.query(`${SELECT_UTENTE} AND id = $2`, [
-      req.utente.organizzazioneId,
-      req.params.id,
-    ]);
     if (!rows[0]) return nonTrovato(res);
     res.json(rows[0]);
   });

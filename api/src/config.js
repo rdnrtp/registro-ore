@@ -23,6 +23,8 @@ function caricaConfig() {
     port: intero('PORT', 3000),
     jwtSecret,
     jwtDurataOre: intero('JWT_DURATA_ORE', 168),
+    // Validità dei link di invito e di reimpostazione della password.
+    invitoDurataOre: intero('INVITO_DURATA_ORE', 72),
     cookieSecure: process.env.COOKIE_SECURE === 'true',
     // Numero di proxy fidati davanti all'API (il nginx del frontend = 1).
     trustProxy: intero('TRUST_PROXY', 1),

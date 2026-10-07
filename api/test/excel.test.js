@@ -11,7 +11,7 @@ const ExcelJS = require('exceljs');
 const JSZip = require('jszip');
 const { preparaAmbiente, nuovaApp, accedi, PASSWORD } = require('./helpers');
 const { hashPassword } = require('../src/password');
-const { caricaOrganizzazione, leggiJson } = require('../src/cli/carica-organizzazione');
+const { caricaOrganizzazione, leggiJson, ErroreGiaConfigurata } = require('../src/cli/carica-organizzazione');
 const { generaFoglioMensile, ErroreModello } = require('../src/excel/foglio-mensile');
 const { validaLayout, letteraColonna } = require('../src/excel/layout');
 
@@ -28,21 +28,32 @@ const PT = { palestra: { data: 'AL', cliente: 'AM' }, acqua: { data: 'AN', clien
 
 const confBv = (slug = 'bv') => ({ ...leggiJson(path.join(SEED_BV, 'organizzazione.json')), slug, nome: slug.toUpperCase() });
 const modelloBv = () => ({ buffer: fs.readFileSync(MODELLO_BV), nomeFile: path.basename(MODELLO_BV) });
-const caricaBv = (pool, slug) =>
+const caricaBv = (pool, slug, sovrascrivi = false) =>
   caricaOrganizzazione(pool, {
     conf: confBv(slug),
     contatti: { emailInvio: `segreteria@${slug}.test`, responsabili: {} },
     abbinamenti: leggiJson(path.join(SEED_BV, 'abbinamenti.json')),
     modello: modelloBv(),
+    sovrascrivi,
   });
 
-async function creaUtente(pool, orgId, email, nome, cognome, hash) {
+async function creaUtente(pool, orgId, email, nome, cognome, hash, ruolo = 'collaboratore') {
   const { rows } = await pool.query(
     `INSERT INTO users (organization_id, email, first_name, last_name, role, password_hash)
-     VALUES ($1, $2, $3, $4, 'collaboratore', $5) RETURNING id`,
-    [orgId, email, nome, cognome, hash],
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    [orgId, email, nome, cognome, ruolo, hash],
   );
   return rows[0].id;
+}
+
+// Copia del modello di BV con alcune celle cambiate: { D30: 'Nuovo nome' }.
+async function modelloModificato(celle, nomeFoglio = 'Foglio1') {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(fs.readFileSync(MODELLO_BV));
+  const ws = wb.getWorksheet('Foglio1');
+  for (const [cella, valore] of Object.entries(celle)) ws.getCell(cella).value = valore;
+  ws.name = nomeFoglio;
+  return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
 // Scarica il file del mese; il corpo è sempre un Buffer.
@@ -351,20 +362,46 @@ describe('esportazione Excel', () => {
     assert.equal(senzaModello.status, 503);
     assert.match(JSON.parse(senzaModello.body).errore, /modello Excel/);
 
-    // Il nome di un'attività non corrisponde più alla riga del modello: niente
+    // Il nome della riga nel modello non corrisponde più all'attività: niente
     // file sbagliato, ma un errore chiaro.
-    await pool.query("UPDATE activities SET name = 'Rinominata' WHERE id = $1", [attivita.Danza.id]);
+    await pool.query("UPDATE activities SET template_label = 'Rinominata' WHERE id = $1", [attivita.Danza.id]);
     try {
       const res = await scarica(petris, 2026, 10);
       assert.equal(res.status, 500);
       assert.match(JSON.parse(res.body).errore, /riga \d+ il modello ha "Danza" invece di "Rinominata"/);
     } finally {
-      await pool.query("UPDATE activities SET name = 'Danza' WHERE id = $1", [attivita.Danza.id]);
+      await pool.query("UPDATE activities SET template_label = 'Danza' WHERE id = $1", [attivita.Danza.id]);
     }
   });
 
-  it('ricaricare la configurazione non crea una nuova versione del modello', async () => {
-    const r = await caricaBv(pool, 'bv');
+  it("un'attività rinominata dall'app si esporta con il nome del modello", async () => {
+    await creaUtente(pool, bv.orgId, 'admin@bv.test', 'Ada', 'Admin', await hashPassword(PASSWORD), 'amministratore');
+    const admin = await accedi(app, 'admin@bv.test');
+    const r = await admin.patch(`/api/attivita/${attivita.Danza.id}`).send({ nome: 'Danza moderna' });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.nome, 'Danza moderna');
+    assert.equal(r.body.nome_modello, 'Danza');
+    try {
+      await salva(petris, '2026-12-09', { Danza: 1.5 });
+      const res = await scarica(petris, 2026, 12);
+      assert.equal(res.status, 200);
+      const ws = await foglio(res.body);
+      verificaAspetto(ws);
+      const riga = attivita.Danza.template_row;
+      assert.equal(ws.getCell(`D${riga}`).value, modello.getCell(`D${riga}`).value);
+      assert.equal(ws.getCell(`${COLONNA_GIORNO(9)}${riga}`).value, 1.5);
+    } finally {
+      await salva(petris, '2026-12-09', { Danza: 0 });
+      await admin.patch(`/api/attivita/${attivita.Danza.id}`).send({ nome: 'Danza' });
+    }
+  });
+
+  it('carica-organizzazione si rifiuta su un impianto già configurato', async () => {
+    await assert.rejects(caricaBv(pool, 'bv'), (err) => err instanceof ErroreGiaConfigurata && /--sovrascrivi/.test(err.message));
+  });
+
+  it('ricaricare la configurazione con --sovrascrivi non crea una nuova versione del modello', async () => {
+    const r = await caricaBv(pool, 'bv', true);
     assert.equal(r.modelloNuovo, false);
     assert.equal(r.versioneModello, 1);
     // Una mappa diversa sì.
@@ -375,10 +412,118 @@ describe('esportazione Excel', () => {
       contatti: { emailInvio: 'segreteria@bv.test', responsabili: {} },
       abbinamenti: null,
       modello: modelloBv(),
+      sovrascrivi: true,
     });
     assert.equal(r2.versioneModello, 2);
     const res = await scarica(petris, 2026, 10);
     assert.match(res.headers['content-disposition'], /filename="2026_10_Petris_Andrea\.xlsx"/);
+  });
+});
+
+describe("caricamento del modello dall'app", () => {
+  let pool, app, bv, admin, collab, attivita;
+
+  before(async () => {
+    ({ pool } = await preparaAmbiente());
+    bv = await caricaBv(pool, 'bv');
+    const hash = await hashPassword(PASSWORD);
+    await creaUtente(pool, bv.orgId, 'admin@bv.test', 'Ada', 'Admin', hash, 'amministratore');
+    await creaUtente(pool, bv.orgId, 'petris@bv.test', 'Andrea', 'Petris', hash);
+    app = nuovaApp(pool);
+    admin = await accedi(app, 'admin@bv.test');
+    collab = await accedi(app, 'petris@bv.test');
+    const { rows } = await pool.query('SELECT id, name, template_row FROM activities WHERE organization_id = $1', [bv.orgId]);
+    attivita = Object.fromEntries(rows.map((r) => [r.name, r]));
+  });
+  after(() => pool.end());
+
+  const carica = (agente, buffer, { anteprima = false, nome = 'modello nuovo.xlsx' } = {}) =>
+    agente
+      .post(`/api/modello${anteprima ? '?anteprima=1' : ''}`)
+      .set('Content-Type', 'application/octet-stream')
+      .set('X-Nome-File', encodeURIComponent(nome))
+      .send(buffer);
+  const versioni = async () => (await pool.query('SELECT count(*)::int AS n FROM excel_templates WHERE organization_id = $1', [bv.orgId])).rows[0].n;
+
+  it('solo l\'amministratore carica un modello', async () => {
+    const res = await carica(collab, fs.readFileSync(MODELLO_BV));
+    assert.equal(res.status, 403);
+    assert.equal((await collab.get('/api/modello')).status, 403);
+    assert.equal((await collab.get('/api/modello/file')).status, 403);
+  });
+
+  it('rifiuta un file identico, un file non Excel e un foglio diverso, senza cambiare nulla', async () => {
+    const identico = await carica(admin, fs.readFileSync(MODELLO_BV));
+    assert.equal(identico.status, 409);
+    assert.match(identico.body.errore, /identico/);
+    const testo = await carica(admin, Buffer.from('non sono un excel'));
+    assert.equal(testo.status, 400);
+    assert.match(testo.body.errore, /non è un Excel valido/);
+    const altroFoglio = await carica(admin, await modelloModificato({}, 'Foglio2'));
+    assert.equal(altroFoglio.status, 400);
+    assert.match(altroFoglio.body.errore, /manca il foglio "Foglio1"/);
+    const estensione = await carica(admin, fs.readFileSync(MODELLO_BV), { nome: 'modello.pdf' });
+    assert.equal(estensione.status, 400);
+    assert.equal(await versioni(), 1);
+  });
+
+  it('rifiuta un modello in cui manca una riga usata da un\'attività', async () => {
+    const riga = attivita.Danza.template_row;
+    const res = await carica(admin, await modelloModificato({ [`D${riga}`]: null }));
+    assert.equal(res.status, 400);
+    assert.match(res.body.errore, new RegExp(`mancano attività che esistono nell'app: "Danza" \\(era alla riga ${riga}\\)`));
+    assert.equal(await versioni(), 1);
+  });
+
+  it('un nome cambiato nel modello: anteprima, poi nuova versione con la stessa attività', async () => {
+    const riga = attivita.Danza.template_row;
+    const file = await modelloModificato({ [`D${riga}`]: 'Danza classica' });
+    const prova = await carica(admin, file, { anteprima: true });
+    assert.equal(prova.status, 200, JSON.stringify(prova.body));
+    assert.deepEqual(prova.body.cambiamenti.rinominate, [{ riga, prima: 'Danza', dopo: 'Danza classica', nome_app: 'Danza' }]);
+    assert.deepEqual(prova.body.cambiamenti.nuove, []);
+    assert.equal(await versioni(), 1, "l'anteprima non salva");
+
+    await collab.put('/api/giorni/2026-10-09').send({ voci: [{ attivita_id: attivita.Danza.id, quantita: 2 }] });
+    const res = await carica(admin, file);
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    assert.equal(res.body.versione, 2);
+    assert.equal(res.body.nome_file, 'modello nuovo.xlsx');
+    const { rows } = await pool.query('SELECT name, template_label FROM activities WHERE id = $1', [attivita.Danza.id]);
+    // Il nome nell'app non era stato cambiato: segue il modello.
+    assert.deepEqual(rows[0], { name: 'Danza classica', template_label: 'Danza classica' });
+
+    // L'esportazione usa il nuovo modello e le ore restano sulla riga.
+    const scaricato = await scarica(collab, 2026, 10);
+    assert.equal(scaricato.status, 200);
+    const ws = await foglio(scaricato.body);
+    assert.equal(ws.getCell(`D${riga}`).value, 'Danza classica');
+    assert.equal(ws.getCell(`${COLONNA_GIORNO(9)}${riga}`).value, 2);
+
+    const traccia = await admin.get('/api/registro-modifiche');
+    const voce = traccia.body.voci.find((v) => v.azione === 'modello.caricato');
+    assert.equal(voce.autore, 'Ada Admin');
+    assert.equal(voce.dettagli.versione, 2);
+    assert.equal(voce.dettagli.rinominate[0].dopo, 'Danza classica');
+
+    const elenco = await admin.get('/api/modello');
+    assert.deepEqual(elenco.body.versioni.map((v) => v.versione), [2, 1]);
+    const scaricaModello = await admin.get('/api/modello/file').buffer(true).parse((r, fine) => {
+      const parti = [];
+      r.on('data', (d) => parti.push(d));
+      r.on('end', () => fine(null, Buffer.concat(parti)));
+    });
+    assert.equal(scaricaModello.status, 200);
+    assert.ok(scaricaModello.body.equals(file));
+  });
+
+  it("un nome personalizzato nell'app resta quando il modello cambia", async () => {
+    const riga = attivita.Bagnino.template_row;
+    await admin.patch(`/api/attivita/${attivita.Bagnino.id}`).send({ nome: 'Assistente bagnanti' });
+    const res = await carica(admin, await modelloModificato({ [`D${attivita.Danza.template_row}`]: 'Danza classica', [`D${riga}`]: 'Bagnini' }));
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    const { rows } = await pool.query('SELECT name, template_label FROM activities WHERE id = $1', [attivita.Bagnino.id]);
+    assert.deepEqual(rows[0], { name: 'Assistente bagnanti', template_label: 'Bagnini' });
   });
 });
 

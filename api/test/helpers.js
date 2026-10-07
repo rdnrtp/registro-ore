@@ -51,13 +51,13 @@ async function creaOrganizzazione(pool, slug, hash) {
     [org.id, [`resp@${slug}.test`]],
   );
   const attivitaOre = await q(
-    `INSERT INTO activities (organization_id, name, unit, template_row, sort_order)
-     VALUES ($1, 'Segreteria', 'ore', 4, 1) RETURNING id`,
+    `INSERT INTO activities (organization_id, name, template_label, unit, template_row, sort_order)
+     VALUES ($1, 'Segreteria', 'Segreteria', 'ore', 4, 1) RETURNING id`,
     [org.id],
   );
   const attivitaSedute = await q(
-    `INSERT INTO activities (organization_id, name, unit, template_row, sort_order)
-     VALUES ($1, 'PT singola', 'sedute', 13, 2) RETURNING id`,
+    `INSERT INTO activities (organization_id, name, template_label, unit, template_row, sort_order)
+     VALUES ($1, 'PT singola', 'PT singola', 'sedute', 13, 2) RETURNING id`,
     [org.id],
   );
   await pool.query('INSERT INTO activity_sectors (organization_id, activity_id, sector_id) VALUES ($1, $2, $3)', [

@@ -1,26 +1,36 @@
-// Crea o aggiorna un'organizzazione a partire da una cartella di configurazione.
+// Crea un'organizzazione a partire da una cartella di configurazione.
 // Uso: npm run carica-organizzazione -- bv
 // (bv = sottocartella di seed/, montata in Docker su /dati/seed)
+//
+// Dalla Fase 4 la configurazione si modifica dall'app: su un'organizzazione
+// già esistente il comando si rifiuta, per non cancellare le modifiche fatte
+// dall'amministratore. Con --sovrascrivi riporta settori, email, abbinamenti,
+// nomi/unità/ordine delle attività e modello a quelli dei file (utenti, ore,
+// responsabili dei settori rimasti e attività attive o no restano come sono).
 //
 // La cartella contiene:
 //   organizzazione.json  slug, nome, modello Excel ("modello": percorso del file
 //                        e mappa delle celle, vedi src/excel/layout.js), righe a
-//                        "sedute", elenco dei settori (tracciato);
-//                        i settori del database assenti dall'elenco vengono eliminati
+//                        "sedute", elenco dei settori (tracciato)
 //   contatti.json        email di invio e dei responsabili (NON tracciato)
 //   abbinamenti.json     attività -> settori; se manca gli abbinamenti non
 //                        vengono toccati (tracciato, solo dopo conferma)
 // Le attività si leggono dal modello Excel. Il modello (file + mappa) viene
 // salvato nel database: è quello che l'API usa per generare i file mensili.
-// Una nuova versione viene creata solo se il file o la mappa sono cambiati.
-// Il comando si può rieseguire: aggiorna i dati senza duplicarli.
-const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const ExcelJS = require('exceljs');
+const { parseArgs } = require('node:util');
 const { creaPool } = require('../db');
-const { validaLayout, sedutePtPerTipo, testoCella } = require('../excel/layout');
-const { generaFoglioMensile } = require('../excel/foglio-mensile');
+const { validaLayout, sedutePtPerTipo } = require('../excel/layout');
+const {
+  leggiRigheAttivita,
+  confrontaAttivita,
+  provaGenerazione,
+  applicaAttivita,
+  salvaVersione,
+  attivitaEsistenti,
+} = require('../excel/modello');
+const { traccia } = require('../traccia');
 
 function leggiJson(file, obbligatorio = true) {
   if (!fs.existsSync(file)) {
@@ -32,60 +42,49 @@ function leggiJson(file, obbligatorio = true) {
   return dati;
 }
 
-async function leggiAttivita(buffer, layout, righeASedute) {
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(buffer);
-  const ws = wb.getWorksheet(layout.foglio);
-  if (!ws) throw new Error(`Foglio "${layout.foglio}" non trovato nel modello`);
-  const sedute = new Set(righeASedute ?? []);
-  const { colonnaNome, primaRiga, ultimaRiga } = layout.attivita;
-  const attivita = [];
-  for (let riga = primaRiga; riga <= ultimaRiga; riga++) {
-    const nome = testoCella(ws.getCell(`${colonnaNome}${riga}`).value);
-    if (!nome) continue;
-    attivita.push({ nome, riga, unita: sedute.has(riga) ? 'sedute' : 'ore', ordine: attivita.length + 1 });
-  }
-  return attivita;
-}
-
 function verificaNomi(nomi, ammessi, descrizione) {
   const sconosciuti = nomi.filter((n) => !ammessi.has(n));
   if (sconosciuti.length) throw new Error(`${descrizione} sconosciuti: ${sconosciuti.join(', ')}`);
 }
 
+// L'organizzazione esiste già: senza richiesta esplicita non si tocca.
+class ErroreGiaConfigurata extends Error {}
+
 // conf, contatti, abbinamenti: contenuto dei file JSON (abbinamenti può essere null).
 // modello: { buffer, nomeFile } = il file Excel del modello.
-async function caricaOrganizzazione(pool, { conf, contatti, abbinamenti, modello }) {
+// sovrascrivi: true per riportare ai file un'organizzazione già esistente.
+async function caricaOrganizzazione(pool, { conf, contatti, abbinamenti, modello, sovrascrivi = false }) {
   // eslint-disable-next-line no-unused-vars
   const { file: _file, ...mappa } = conf.modello ?? {};
   const layout = validaLayout(mappa);
-  const attivita = await leggiAttivita(modello.buffer, layout, conf.righeASedute);
-  // Prova di generazione di un mese vuoto: se il modello non si compila con
-  // questa mappa è meglio saperlo ora che quando un utente scarica il file.
-  await generaFoglioMensile(modello.buffer, layout, {
-    anno: 2026,
-    mese: 2,
-    nome: 'Prova',
-    cognome: 'Prova',
-    attivita: attivita.map((a) => ({ id: a.nome, nome: a.nome, riga: a.riga })),
-    registrazioni: [],
-    sedutePt: [],
-  });
+  const righe = await leggiRigheAttivita(modello.buffer, layout);
+  await provaGenerazione(modello.buffer, layout, righe);
+  const sedute = new Set(conf.righeASedute ?? []);
+  const unitaPerRiga = (riga) => (sedute.has(riga) ? 'sedute' : 'ore');
+  const ordine = new Map(righe.map((r, i) => [r.riga, i + 1]));
   const ptPerTipo = sedutePtPerTipo(layout);
-  const sha256 = crypto.createHash('sha256').update(modello.buffer).digest('hex');
 
   const settori = new Set(conf.settori);
   verificaNomi(Object.keys(contatti.responsabili ?? {}), settori, 'Settori in contatti.json');
   if (abbinamenti) {
-    verificaNomi(Object.keys(abbinamenti), new Set(attivita.map((a) => a.nome)), 'Attività in abbinamenti.json');
+    verificaNomi(Object.keys(abbinamenti), new Set(righe.map((a) => a.etichetta)), 'Attività in abbinamenti.json');
     verificaNomi(Object.values(abbinamenti).flat(), settori, 'Settori in abbinamenti.json');
-    const senzaSettore = attivita.filter((a) => !abbinamenti[a.nome]?.length).map((a) => a.nome);
+    const senzaSettore = righe.filter((a) => !abbinamenti[a.etichetta]?.length).map((a) => a.etichetta);
     if (senzaSettore.length) throw new Error(`Attività senza settore in abbinamenti.json: ${senzaSettore.join(', ')}`);
   }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const esistente = await client.query('SELECT id FROM organizations WHERE slug = $1 FOR UPDATE', [conf.slug]);
+    if (esistente.rows[0] && !sovrascrivi) {
+      throw new ErroreGiaConfigurata(
+        `L'organizzazione "${conf.slug}" esiste già: la sua configurazione si modifica dall'app ` +
+          "(pagine di gestione dell'amministratore) e questo comando cancellerebbe quelle modifiche.\n" +
+          'Se vuoi davvero riportarla ai file di seed/ (settori, email, abbinamenti, nomi e unità delle attività, ' +
+          'indirizzo di invio e modello), riesegui il comando aggiungendo --sovrascrivi.',
+      );
+    }
     const org = await client.query(
       `INSERT INTO organizations (slug, name, submission_email, pt_sessions_per_kind) VALUES ($1, $2, $3, $4)
        ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, submission_email = EXCLUDED.submission_email,
@@ -113,43 +112,15 @@ async function caricaOrganizzazione(pool, { conf, contatti, abbinamenti, modello
       [orgId, conf.settori],
     );
 
-    // Libera temporaneamente le righe del modello, così un'attività può
-    // spostarsi su una riga occupata da un'altra senza violare l'unicità.
-    await client.query('UPDATE activities SET template_row = template_row + 100000 WHERE organization_id = $1', [orgId]);
-    // Rinomina: se nel database la riga è occupata da un nome che non compare
-    // più nel modello, è la stessa attività con un nome nuovo. Si aggiorna il
-    // nome e l'attività conserva il suo id (e le ore già registrate).
-    const nomiModello = attivita.map((a) => a.nome);
-    const rinominate = [];
-    for (const a of attivita) {
-      const r = await client.query(
-        `UPDATE activities SET name = $3
-          WHERE organization_id = $1 AND template_row = $2 + 100000
-            AND name <> ALL($4::text[])
-            AND NOT EXISTS (SELECT 1 FROM activities WHERE organization_id = $1 AND name = $3)
-          RETURNING name`,
-        [orgId, a.riga, a.nome, nomiModello],
-      );
-      if (r.rows[0]) rinominate.push(a);
-    }
-    const idAttivita = new Map();
-    for (const a of attivita) {
-      const r = await client.query(
-        `INSERT INTO activities (organization_id, name, unit, template_row, sort_order) VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (organization_id, name)
-         DO UPDATE SET unit = EXCLUDED.unit, template_row = EXCLUDED.template_row, sort_order = EXCLUDED.sort_order
-         RETURNING id`,
-        [orgId, a.nome, a.unita, a.riga, a.ordine],
-      );
-      idAttivita.set(a.nome, r.rows[0].id);
-    }
-    const orfane = await client.query(
-      'SELECT name FROM activities WHERE organization_id = $1 AND template_row > 100000',
-      [orgId],
-    );
-    if (orfane.rows.length) {
-      throw new Error(`Attività presenti nel database ma non più nel modello: ${orfane.rows.map((r) => r.name).join(', ')}`);
-    }
+    // Attività: stesso confronto del caricamento di un modello dall'app
+    // (src/excel/modello.js); nomi, unità e ordine tornano quelli dei file.
+    const confronto = confrontaAttivita(await attivitaEsistenti(client, orgId), righe);
+    await applicaAttivita(client, orgId, confronto, {
+      sovrascrivi: true,
+      unitaPerRiga,
+      ordinePerRiga: (riga) => ordine.get(riga),
+    });
+    const idAttivita = new Map((await attivitaEsistenti(client, orgId)).map((a) => [a.etichetta, a.id]));
 
     if (abbinamenti) {
       await client.query('DELETE FROM activity_sectors WHERE organization_id = $1', [orgId]);
@@ -163,34 +134,25 @@ async function caricaOrganizzazione(pool, { conf, contatti, abbinamenti, modello
       }
     }
 
-    // Modello Excel: nuova versione solo se il file o la mappa sono cambiati.
-    const ultimo = await client.query(
-      `SELECT version, sha256 = $2 AND layout = $3::jsonb AS uguale
-         FROM excel_templates WHERE organization_id = $1 ORDER BY version DESC LIMIT 1`,
-      [orgId, sha256, JSON.stringify(layout)],
-    );
-    let versioneModello = ultimo.rows[0]?.version ?? 0;
-    const modelloNuovo = !ultimo.rows[0]?.uguale;
-    if (modelloNuovo) {
-      versioneModello += 1;
-      await client.query(
-        `INSERT INTO excel_templates (organization_id, version, file, file_name, sha256, layout)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [orgId, versioneModello, modello.buffer, modello.nomeFile, sha256, JSON.stringify(layout)],
-      );
-    }
+    const versione = await salvaVersione(client, orgId, { buffer: modello.buffer, nomeFile: modello.nomeFile, layout });
+    await traccia(client, {
+      organizzazioneId: orgId,
+      utente: null,
+      azione: esistente.rows[0] ? 'organizzazione.sovrascritta_da_terminale' : 'organizzazione.creata_da_terminale',
+      dettagli: { slug: conf.slug, versione_modello: versione.versione, file_modello: modello.nomeFile },
+    });
     await client.query('COMMIT');
 
     return {
       orgId,
       settori: idSettore.size,
       settoriRimossi: rimossi.rows.map((r) => r.name),
-      attivita,
-      rinominate,
+      attivita: righe.map((r) => ({ nome: r.etichetta, riga: r.riga, unita: unitaPerRiga(r.riga) })),
+      rinominate: confronto.rinominate.map((a) => ({ nome: a.nuova.etichetta, riga: a.nuova.riga })),
       ptPerTipo,
       abbinamenti: abbinamenti ? Object.values(abbinamenti).flat().length : null,
-      versioneModello,
-      modelloNuovo,
+      versioneModello: versione.versione,
+      modelloNuovo: versione.nuova,
     };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -201,8 +163,14 @@ async function caricaOrganizzazione(pool, { conf, contatti, abbinamenti, modello
 }
 
 async function main() {
-  const argomento = process.argv[2];
-  if (!argomento) throw new Error('Uso: npm run carica-organizzazione -- <nome cartella in seed>   (es. bv)');
+  const { values, positionals } = parseArgs({
+    allowPositionals: true,
+    options: { sovrascrivi: { type: 'boolean', default: false } },
+  });
+  const argomento = positionals[0];
+  if (!argomento || positionals.length > 1) {
+    throw new Error('Uso: npm run carica-organizzazione -- <nome cartella in seed> [--sovrascrivi]   (es. bv)');
+  }
   // Un nome semplice indica una sottocartella di SEED_DIR (in Docker /dati/seed).
   const cartella = /[\\/]/.test(argomento) ? argomento : path.join(process.env.SEED_DIR ?? '/dati/seed', argomento);
   const conf = leggiJson(path.join(cartella, 'organizzazione.json'));
@@ -215,7 +183,7 @@ async function main() {
 
   const pool = creaPool();
   try {
-    const r = await caricaOrganizzazione(pool, { conf, contatti, abbinamenti, modello });
+    const r = await caricaOrganizzazione(pool, { conf, contatti, abbinamenti, modello, sovrascrivi: values.sovrascrivi });
     const nSedute = r.attivita.filter((a) => a.unita === 'sedute').length;
     console.log(`Organizzazione "${conf.nome}" (${conf.slug}) caricata.`);
     for (const a of r.rinominate) console.log(`  Rinominata la riga ${a.riga} in "${a.nome}"`);
@@ -245,4 +213,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { caricaOrganizzazione, leggiJson };
+module.exports = { caricaOrganizzazione, leggiJson, ErroreGiaConfigurata };

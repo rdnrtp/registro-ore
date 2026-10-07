@@ -1,5 +1,4 @@
 const express = require('express');
-const { autenticato } = require('../auth');
 const { transazione } = require('../db');
 const { ErroreHttp } = require('../errori');
 const { NOMI_MESI, isUuid, giorniNelMese, leggiAnnoMese, leggiData, numeroIt } = require('../validazione');
@@ -11,10 +10,9 @@ const MAX_LUNGHEZZA_CLIENTE = 100;
 // Registrazioni personali: ore, orario tipo, "le mie attività" e sedute di
 // personal training. Ogni utente legge e modifica solo i propri dati, anche se
 // è amministratore: l'utente è sempre req.utente.id, mai un valore della
-// richiesta. Le viste sui dati degli altri arriveranno nella Fase 4.
+// richiesta. Le viste in sola lettura sui dati degli altri sono in collaboratori.js.
 function rotteRegistro({ pool, config }) {
   const router = express.Router();
-  router.use(autenticato(config));
 
   const nonValido = (messaggio) => new ErroreHttp(400, messaggio);
   const attivitaNonTrovata = () => new ErroreHttp(404, 'Attività non trovata');
@@ -334,59 +332,103 @@ function rotteRegistro({ pool, config }) {
 
   // Indipendenti dalle quantità delle righe "PT …" della griglia: per ora non
   // sono collegate (da chiarire con l'impianto come vanno conteggiate).
-  // Corpo: { data, tipo: 'acqua' | 'palestra', cliente }
-  router.post('/sedute-pt', async (req, res) => {
-    const data = dataDa(req.body?.data);
-    const tipo = req.body?.tipo;
+
+  // Corpo { data, tipo: 'acqua' | 'palestra', cliente } controllato.
+  function leggiSeduta(corpo) {
+    const data = dataDa(corpo?.data);
+    const tipo = corpo?.tipo;
     if (!TIPI_PT.includes(tipo)) throw nonValido('Tipo di seduta non valido: acqua o palestra');
-    const cliente = typeof req.body?.cliente === 'string' ? req.body.cliente.trim().replace(/\s+/g, ' ') : '';
+    const cliente = typeof corpo?.cliente === 'string' ? corpo.cliente.trim().replace(/\s+/g, ' ') : '';
     if (!cliente) throw nonValido('Indica il nome del cliente');
     if (cliente.length > MAX_LUNGHEZZA_CLIENTE) throw nonValido(`Nome del cliente troppo lungo (al massimo ${MAX_LUNGHEZZA_CLIENTE} caratteri)`);
-    const u = req.utente;
+    return { data, tipo, cliente };
+  }
 
+  // Il modello Excel ha un numero fisso di righe per tipo: oltre non si va.
+  // tranneId = seduta da non contare (quella che si sta modificando).
+  async function verificaPostoSedute(client, u, { data, tipo }, tranneId = null) {
+    const { rows } = await client.query(
+      `SELECT o.pt_sessions_per_kind AS massimo,
+              (SELECT count(*)::int FROM pt_sessions p
+                WHERE p.user_id = $1 AND p.organization_id = o.id AND p.kind = $3
+                  AND p.session_date >= make_date($4, $5, 1)
+                  AND p.session_date < make_date($4, $5, 1) + interval '1 month'
+                  AND p.id IS DISTINCT FROM $6) AS presenti
+         FROM organizations o WHERE o.id = $2`,
+      [u.id, u.organizzazioneId, tipo, data.anno, data.mese, tranneId],
+    );
+    const { massimo, presenti } = rows[0];
+    if (presenti >= massimo) {
+      throw nonValido(
+        `Hai già ${presenti} sedute di personal training in ${tipo} a ${NOMI_MESI[data.mese - 1]} ${data.anno}: ` +
+          `il modello Excel ha spazio per ${massimo} sedute per tipo in un mese, quindi non se ne possono aggiungere altre.`,
+      );
+    }
+  }
+
+  const COLONNE_SEDUTA = 'id, session_date AS data, kind AS tipo, client_name AS cliente';
+
+  router.post('/sedute-pt', async (req, res) => {
+    const nuova = leggiSeduta(req.body);
+    const u = req.utente;
     const seduta = await transazione(pool, async (client) => {
       await bloccaUtente(client, u);
-      await verificaMeseAperto(client, u, data.anno, data.mese);
+      await verificaMeseAperto(client, u, nuova.data.anno, nuova.data.mese);
+      await verificaPostoSedute(client, u, nuova);
       const { rows } = await client.query(
-        `SELECT o.pt_sessions_per_kind AS massimo,
-                (SELECT count(*)::int FROM pt_sessions p
-                  WHERE p.user_id = $1 AND p.organization_id = o.id AND p.kind = $3
-                    AND p.session_date >= make_date($4, $5, 1)
-                    AND p.session_date < make_date($4, $5, 1) + interval '1 month') AS presenti
-           FROM organizations o WHERE o.id = $2`,
-        [u.id, u.organizzazioneId, tipo, data.anno, data.mese],
-      );
-      const { massimo, presenti } = rows[0];
-      if (presenti >= massimo) {
-        throw nonValido(
-          `Hai già ${presenti} sedute di personal training in ${tipo} a ${NOMI_MESI[data.mese - 1]} ${data.anno}: ` +
-            `il modello Excel ha spazio per ${massimo} sedute per tipo in un mese, quindi non se ne possono aggiungere altre.`,
-        );
-      }
-      const nuova = await client.query(
         `INSERT INTO pt_sessions (organization_id, user_id, session_date, kind, client_name)
          VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, session_date AS data, kind AS tipo, client_name AS cliente`,
-        [u.organizzazioneId, u.id, data.testo, tipo, cliente],
+         RETURNING ${COLONNE_SEDUTA}`,
+        [u.organizzazioneId, u.id, nuova.data.testo, nuova.tipo, nuova.cliente],
       );
-      return nuova.rows[0];
+      return rows[0];
     });
     res.status(201).json(seduta);
   });
 
+  const sedutaNonTrovata = () => new ErroreHttp(404, 'Non trovato');
+
+  // Seduta dell'utente con anno e mese, oppure 404.
+  async function leggiSedutaPropria(client, u, id) {
+    if (!isUuid(id)) throw sedutaNonTrovata();
+    const { rows } = await client.query(
+      `SELECT EXTRACT(YEAR FROM session_date)::int AS anno, EXTRACT(MONTH FROM session_date)::int AS mese
+         FROM pt_sessions WHERE id = $1 AND user_id = $2 AND organization_id = $3`,
+      [id, u.id, u.organizzazioneId],
+    );
+    if (!rows[0]) throw sedutaNonTrovata();
+    return rows[0];
+  }
+
+  // Modifica data, tipo o cliente. Corpo: { data, tipo, cliente }.
+  // Sia il mese di partenza sia quello di arrivo devono essere aperti.
+  router.put('/sedute-pt/:id', async (req, res) => {
+    const u = req.utente;
+    if (!isUuid(req.params.id)) throw sedutaNonTrovata();
+    const nuova = leggiSeduta(req.body);
+    const seduta = await transazione(pool, async (client) => {
+      await bloccaUtente(client, u);
+      const prima = await leggiSedutaPropria(client, u, req.params.id);
+      await verificaMeseAperto(client, u, prima.anno, prima.mese);
+      await verificaMeseAperto(client, u, nuova.data.anno, nuova.data.mese);
+      await verificaPostoSedute(client, u, nuova, req.params.id);
+      const { rows } = await client.query(
+        `UPDATE pt_sessions SET session_date = $4, kind = $5, client_name = $6
+          WHERE id = $1 AND user_id = $2 AND organization_id = $3
+          RETURNING ${COLONNE_SEDUTA}`,
+        [req.params.id, u.id, u.organizzazioneId, nuova.data.testo, nuova.tipo, nuova.cliente],
+      );
+      return rows[0];
+    });
+    res.json(seduta);
+  });
+
   router.delete('/sedute-pt/:id', async (req, res) => {
-    const nonTrovata = () => new ErroreHttp(404, 'Non trovato');
-    if (!isUuid(req.params.id)) throw nonTrovata();
     const u = req.utente;
     await transazione(pool, async (client) => {
       await bloccaUtente(client, u);
-      const { rows } = await client.query(
-        `SELECT EXTRACT(YEAR FROM session_date)::int AS anno, EXTRACT(MONTH FROM session_date)::int AS mese
-           FROM pt_sessions WHERE id = $1 AND user_id = $2 AND organization_id = $3`,
-        [req.params.id, u.id, u.organizzazioneId],
-      );
-      if (!rows[0]) throw nonTrovata();
-      await verificaMeseAperto(client, u, rows[0].anno, rows[0].mese);
+      const s = await leggiSedutaPropria(client, u, req.params.id);
+      await verificaMeseAperto(client, u, s.anno, s.mese);
       await client.query('DELETE FROM pt_sessions WHERE id = $1 AND user_id = $2 AND organization_id = $3', [
         req.params.id,
         u.id,

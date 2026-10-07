@@ -8,8 +8,8 @@ async function ambiente() {
   const { pool, A, B } = await preparaAmbiente();
   // Seconda attività a ore, per superare le 24 ore in un giorno.
   const { rows } = await pool.query(
-    `INSERT INTO activities (organization_id, name, unit, template_row, sort_order)
-     VALUES ($1, 'Bagnino', 'ore', 5, 3) RETURNING id`,
+    `INSERT INTO activities (organization_id, name, template_label, unit, template_row, sort_order)
+     VALUES ($1, 'Bagnino', 'Bagnino', 'ore', 5, 3) RETURNING id`,
     [A.id],
   );
   A.attivitaOre2 = rows[0].id;
