@@ -26,6 +26,30 @@ async function chiama(percorso, opzioni = {}) {
   return dati;
 }
 
+// Nome del file dall'intestazione Content-Disposition (filename* se c'è).
+function nomeDaIntestazione(valore) {
+  const esteso = /filename\*=UTF-8''([^;]+)/i.exec(valore ?? '');
+  if (esteso) return decodeURIComponent(esteso[1]);
+  return /filename="([^"]+)"/i.exec(valore ?? '')?.[1];
+}
+
+// Scarica un file: { blob, nomeFile }. Gli errori arrivano in JSON come per
+// le altre chiamate.
+async function scaricaFile(percorso) {
+  let risposta;
+  try {
+    risposta = await fetch(`/api${percorso}`, { credentials: 'same-origin' });
+  } catch {
+    throw new ErroreApi('Impossibile contattare il server. Controlla la connessione.', 0);
+  }
+  if (!risposta.ok) {
+    const dati = await risposta.json().catch(() => ({}));
+    if (risposta.status === 401) gestori.nonAutenticato?.();
+    throw new ErroreApi(dati.errore ?? 'Si è verificato un errore', risposta.status);
+  }
+  return { blob: await risposta.blob(), nomeFile: nomeDaIntestazione(risposta.headers.get('Content-Disposition')) };
+}
+
 const gestori = {};
 
 // Chiamata quando una richiesta risponde 401.
@@ -48,6 +72,7 @@ export const api = {
   salvaGiorno: (data, voci) => chiama(`/giorni/${data}`, json('PUT', { voci })),
   anteprimaPrecompilazione: (anno, mese) => chiama(`/mese/${anno}/${mese}/precompilazione`),
   precompila: (anno, mese) => chiama(`/mese/${anno}/${mese}/precompilazione`, json('POST')),
+  excelMese: (anno, mese) => scaricaFile(`/mese/${anno}/${mese}/excel`),
 
   orarioTipo: () => chiama('/orario-tipo'),
   salvaOrarioTipo: (voci) => chiama('/orario-tipo', json('PUT', { voci })),

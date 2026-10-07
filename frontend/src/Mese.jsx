@@ -5,6 +5,19 @@ import Foglio from './Foglio.jsx';
 import SchedaGiorno from './SchedaGiorno.jsx';
 import SedutePt from './SedutePt.jsx';
 
+// Salva sul dispositivo un file ricevuto dall'API (anche da telefono: Safari e
+// Chrome rispettano l'attributo download sugli indirizzi blob).
+function salvaFile(blob, nomeFile) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nomeFile;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 const dalla = (data) => ({ anno: Number(data.slice(0, 4)), mese: Number(data.slice(5, 7)) });
 
 export default function Mese({ attivita, mie }) {
@@ -16,6 +29,8 @@ export default function Mese({ attivita, mie }) {
   const [avviso, setAvviso] = useState('');
   const [giornoAperto, setGiornoAperto] = useState(null);
   const [precompilazione, setPrecompilazione] = useState(null);
+  const [scaricando, setScaricando] = useState(false);
+  const [avvisoVuoto, setAvvisoVuoto] = useState(false);
   const rifOggi = useRef(null);
   const daPosizionare = useRef(true);
   const { anno, mese } = periodo;
@@ -101,6 +116,26 @@ export default function Mese({ attivita, mie }) {
     ricarica();
   }
 
+  // Un mese senza nessuna registrazione darebbe un file senza ore: prima si chiede conferma.
+  async function scaricaExcel(confermato = false) {
+    setAvvisoVuoto(false);
+    if (!confermato && dati.registrazioni.length === 0) {
+      setAvvisoVuoto(true);
+      return;
+    }
+    setAvviso('');
+    setErrore('');
+    setScaricando(true);
+    try {
+      const { blob, nomeFile } = await api.excelMese(anno, mese);
+      salvaFile(blob, nomeFile ?? `${anno}-${mese}.xlsx`);
+    } catch (err) {
+      setErrore(err.message);
+    } finally {
+      setScaricando(false);
+    }
+  }
+
   const nGiorni = precompilazione?.giorni.length ?? 0;
   const parolaGiorni = nGiorni === 1 ? 'giorno' : 'giorni';
 
@@ -133,6 +168,11 @@ export default function Mese({ attivita, mie }) {
           {!eMeseCorrente && (
             <button type="button" className="piccolo neutro" onClick={() => vaiA(meseCorrente, true)}>
               Oggi
+            </button>
+          )}
+          {dati && (
+            <button type="button" className="piccolo" onClick={() => scaricaExcel()} disabled={scaricando}>
+              {scaricando ? 'Preparo il file…' : 'Scarica Excel'}
             </button>
           )}
           {dati && !solaLettura && (
@@ -259,6 +299,29 @@ export default function Mese({ attivita, mie }) {
             ricarica();
           }}
         />
+      )}
+
+      {avvisoVuoto && dati && (
+        <Foglio
+          titolo="Mese senza ore"
+          onChiudi={() => setAvvisoVuoto(false)}
+          piede={
+            <div className="pulsanti">
+              <button type="button" className="neutro" onClick={() => setAvvisoVuoto(false)}>
+                Annulla
+              </button>
+              <button type="button" onClick={() => scaricaExcel(true)}>
+                Scarica comunque
+              </button>
+            </div>
+          }
+        >
+          <p>
+            In {nomeMese} non hai registrato nessuna ora: il file avrà la griglia vuota
+            {dati.sedute_pt.length > 0 ? ` e conterrà solo le sedute di personal training (${dati.sedute_pt.length})` : ''}.
+          </p>
+          <p className="dettaglio">Se è il file da inviare alla segreteria, controlla prima di aver inserito tutte le ore.</p>
+        </Foglio>
       )}
 
       {precompilazione && (
