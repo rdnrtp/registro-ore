@@ -254,8 +254,8 @@ describe('configurazione: attività, settori, organizzazione', () => {
     assert.ok(voci.length >= 5);
     const date = voci.map((v) => v.quando);
     assert.deepEqual(date, [...date].sort().reverse());
-    const precedenti = (await admin.get('/api/registro-modifiche').query({ prima: voci[1].quando })).body.voci;
-    assert.ok(precedenti.every((v) => v.quando < voci[1].quando));
-    assert.equal((await admin.get('/api/registro-modifiche').query({ prima: 'ieri' })).status, 400);
+    const seguenti = (await admin.get('/api/registro-modifiche').query({ salta: 2 })).body.voci;
+    assert.deepEqual(seguenti.map((v) => v.id), voci.slice(2).map((v) => v.id));
+    assert.equal((await admin.get('/api/registro-modifiche').query({ salta: 'ieri' })).status, 400);
   });
 });

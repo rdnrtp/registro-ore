@@ -370,19 +370,21 @@ function rotteConfigurazione({ pool }) {
 
   // ------------------------------------------------ Traccia delle modifiche
 
-  // Le 100 voci più recenti; ?prima=<data ISO> per le precedenti.
+  // Le 100 voci più recenti; ?salta=100 per le 100 precedenti, e così via.
+  // (Le voci di una stessa modifica hanno lo stesso istante: uno scostamento
+  // numerico non ne salta nessuna, un filtro per data sì.)
   router.get('/registro-modifiche', soloAdmin, async (req, res) => {
-    const prima = req.query.prima;
-    if (prima !== undefined && (typeof prima !== 'string' || Number.isNaN(Date.parse(prima)))) throw nonValido('Data non valida');
+    const salta = req.query.salta === undefined ? 0 : Number(req.query.salta);
+    if (!Number.isInteger(salta) || salta < 0 || salta > 1_000_000) throw nonValido('Valore di "salta" non valido');
     const { rows } = await pool.query(
       `SELECT l.id, l.created_at AS quando, l.action AS azione, l.target_type AS tipo, l.target_id AS oggetto_id,
               l.details AS dettagli, u.first_name AS nome, u.last_name AS cognome
          FROM audit_log l
          LEFT JOIN users u ON u.id = l.actor_id AND u.organization_id = l.organization_id
-        WHERE l.organization_id = $1 AND ($2::timestamptz IS NULL OR l.created_at < $2::timestamptz)
-        ORDER BY l.created_at DESC, l.id
-        LIMIT 100`,
-      [req.utente.organizzazioneId, prima ?? null],
+        WHERE l.organization_id = $1
+        ORDER BY l.created_at DESC, l.id DESC
+        LIMIT 100 OFFSET $2`,
+      [req.utente.organizzazioneId, salta],
     );
     res.json({
       voci: rows.map(({ nome, cognome, ...r }) => ({ ...r, autore: nome ? `${nome} ${cognome}` : null })),
