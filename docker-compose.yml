@@ -66,6 +66,12 @@ services:
     environment:
       <<: *db-env
       PGDATABASE: registro_ore_test
+      # I test dell'esportazione usano il modello reale di BV e la sua mappa.
+      MODELLO_BV: /dati/modello/modello_bv.xlsx
+      SEED_DIR: /dati/seed
+    volumes:
+      - ./modello:/dati/modello:ro
+      - ./seed:/dati/seed:ro
 
 volumes:
   pgdata:

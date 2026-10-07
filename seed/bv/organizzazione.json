@@ -4,10 +4,28 @@
   "modello": {
     "file": "../../modello/modello_bv.xlsx",
     "foglio": "Foglio1",
-    "colonnaAttivita": "D",
-    "primaRiga": 4,
-    "ultimaRiga": 33,
-    "righeSedutePt": { "prima": 6, "ultima": 32 }
+    "celle": { "mese": "B2", "nome": "B4", "cognome": "C4" },
+    "giorni": { "rigaNumeri": 2, "rigaSigle": 3, "primaColonna": "E" },
+    "attivita": {
+      "colonnaNome": "D",
+      "primaRiga": 4,
+      "ultimaRiga": 33,
+      "colonnaTotale": "AJ",
+      "totaleGenerale": "AJ34"
+    },
+    "sedutePt": {
+      "primaRiga": 6,
+      "ultimaRiga": 32,
+      "formatoData": "dd/mm/yyyy",
+      "palestra": { "colonnaData": "AL", "colonnaCliente": "AM" },
+      "acqua": { "colonnaData": "AN", "colonnaCliente": "AO" }
+    },
+    "nomiMesi": [
+      "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
+      "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"
+    ],
+    "sigleGiorni": ["LU", "MA", "ME", "GI", "VE", "SA", "DO"],
+    "nomeFile": "{MM}_{MESE}_{AAAA}_{COGNOME}.xlsx"
   },
   "righeASedute": [13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26],
   "settori": [

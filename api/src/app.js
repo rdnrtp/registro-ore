@@ -3,6 +3,7 @@ const cookieParser = require('cookie-parser');
 const { rotteAuth } = require('./routes/auth');
 const { rotteOrganizzazione } = require('./routes/organizzazione');
 const { rotteRegistro } = require('./routes/registro');
+const { rotteEsportazione } = require('./routes/esportazione');
 const { ErroreHttp } = require('./errori');
 
 function creaApp({ pool, config }) {
@@ -19,6 +20,7 @@ function creaApp({ pool, config }) {
   app.use('/api/auth', rotteAuth({ pool, config }));
   app.use('/api', rotteOrganizzazione({ pool, config }));
   app.use('/api', rotteRegistro({ pool, config }));
+  app.use('/api', rotteEsportazione({ pool, config }));
 
   app.use('/api', (req, res) => res.status(404).json({ errore: 'Non trovato' }));
 
