@@ -738,3 +738,328 @@ button.chiudi {
   color: var(--colore-errore);
   font-weight: 700;
 }
+
+/* ------------------------------------------------------------ Fase 4 */
+
+:root {
+  --colore-spento: #8a969f;
+  --colore-pericolo: #b42318;
+}
+
+a.indietro {
+  display: inline-block;
+  min-height: 44px;
+  padding: 10px 0;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.testata-mese a.indietro {
+  min-height: 0;
+  padding: 0;
+}
+
+.testata-mese .riassunto {
+  margin: 4px 0 0;
+}
+
+/* Elenchi di persone, settori, attività: righe da toccare. */
+.elenco-persone,
+.elenco-attivita,
+.menu-gestione {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+
+.elenco-persone li,
+.menu-gestione li {
+  margin-bottom: 6px;
+}
+
+.elenco-persone a,
+.elenco-persone button,
+.menu-gestione a {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--colore-scheda);
+  color: var(--colore-testo);
+  font-weight: 400;
+  text-align: left;
+  text-decoration: none;
+}
+
+.mese .elenco-persone {
+  margin: 8px 12px;
+}
+
+.elenco-persone button.spento,
+.elenco-attivita li.spento {
+  opacity: 0.65;
+}
+
+.menu-gestione a {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.menu-gestione small,
+.persona-nome small {
+  display: block;
+  color: var(--colore-secondario);
+  font-size: 0.85rem;
+}
+
+.persona-nome {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.persona-nome small {
+  font-weight: 400;
+}
+
+.persona-nome small.nota {
+  color: var(--colore-testo-sabato);
+}
+
+.persona-totale {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.persona-totale small {
+  display: block;
+  color: var(--colore-secondario);
+}
+
+.etichetta {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #e8edf1;
+  color: var(--colore-secondario);
+}
+
+.etichetta.inviato {
+  background: #dcefe2;
+  color: var(--colore-conferma);
+}
+
+.etichetta.responsabile {
+  background: #e0eef5;
+  color: var(--colore-principale);
+}
+
+.etichetta.amministratore {
+  background: #ece6f5;
+  color: #5b3d8a;
+}
+
+.persona-nome .etichetta.spenta {
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+button.nuovo {
+  width: 100%;
+  margin: 12px 0 4px;
+}
+
+/* Moduli delle pagine di gestione. */
+.form-gestione {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+fieldset {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+label.opzione {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  font-weight: 400;
+}
+
+label.opzione input {
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  margin: 2px 0 0;
+  flex: 0 0 auto;
+}
+
+label.opzione small {
+  display: block;
+  color: var(--colore-secondario);
+}
+
+textarea {
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  padding: 12px;
+  border: 1px solid var(--colore-bordo);
+  border-radius: 8px;
+  resize: vertical;
+}
+
+input[type='file'] {
+  min-height: 0;
+  padding: 10px;
+  background: var(--colore-scheda);
+}
+
+.azioni-utente {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--colore-bordo);
+}
+
+button.pericolo {
+  background: transparent;
+  color: var(--colore-pericolo);
+  border: 1px solid var(--colore-pericolo);
+}
+
+input.link-invito {
+  width: 100%;
+  margin: 8px 0;
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+}
+
+/* Attività: riga da toccare più frecce per l'ordine. */
+.elenco-attivita li {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.elenco-attivita button.apri {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--colore-scheda);
+  color: var(--colore-testo);
+  font-weight: 400;
+  text-align: left;
+}
+
+.ordine {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ordine button {
+  flex: 1;
+  width: 44px;
+  min-height: 27px;
+  padding: 0;
+  background: var(--colore-scheda);
+  color: var(--colore-principale);
+}
+
+.sezione-gestione {
+  margin: 16px 0;
+  padding: 16px;
+  background: var(--colore-scheda);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sezione-gestione h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.sezione-gestione p {
+  margin: 0;
+}
+
+.anteprima-modello {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--colore-oggi);
+}
+
+.elenco-cambiamenti {
+  margin: 0;
+  padding-left: 20px;
+}
+
+/* Registro delle modifiche */
+.registro {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+
+.registro li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--colore-bordo);
+  overflow-wrap: anywhere;
+}
+
+.registro small {
+  color: var(--colore-secondario);
+}
+
+/* Sedute PT: pulsante di modifica accanto a quello di eliminazione. */
+button.modifica {
+  min-height: 44px;
+  width: 44px;
+  padding: 0;
+  font-size: 1.2rem;
+  background: transparent;
+  color: var(--colore-principale);
+}
+
+button.modifica[aria-pressed='true'] {
+  background: var(--colore-oggi);
+}
+
+.scelta button[aria-pressed='true'] {
+  background: var(--colore-principale);
+  color: #fff;
+}

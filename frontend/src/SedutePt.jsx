@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { api } from './api.js';
 import { GIORNI_BREVI, NOMI_MESI, giornoSettimana, giorniDelMese, isoData } from './date.js';
 
@@ -16,17 +16,39 @@ export default function SedutePt({ anno, mese, oggi, sedute, massimo, solaLettur
   const [tipo, setTipo] = useState('acqua');
   const [cliente, setCliente] = useState('');
   const [errore, setErrore] = useState('');
+  const rifModulo = useRef(null);
   const [invio, setInvio] = useState(false);
+  // Seduta che si sta modificando (null = il modulo aggiunge una seduta nuova).
+  const [inModifica, setInModifica] = useState(null);
 
   const conta = (t) => sedute.filter((s) => s.tipo === t).length;
-  const pieno = conta(tipo) >= massimo;
+  // Modificando una seduta dello stesso tipo il posto è già suo.
+  const pieno = conta(tipo) - (inModifica?.tipo === tipo ? 1 : 0) >= massimo;
 
-  async function aggiungi(evento) {
+  function annullaModifica() {
+    setInModifica(null);
+    setCliente('');
+    setData(dataPredefinita);
+    setErrore('');
+  }
+
+  function modifica(s) {
+    setInModifica(s);
+    setData(s.data);
+    setTipo(s.tipo);
+    setCliente(s.cliente);
+    setErrore('');
+    rifModulo.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
+  async function salva(evento) {
     evento.preventDefault();
     setErrore('');
     setInvio(true);
     try {
-      await api.aggiungiSedutaPt({ data, tipo, cliente });
+      if (inModifica) await api.modificaSedutaPt(inModifica.id, { data, tipo, cliente });
+      else await api.aggiungiSedutaPt({ data, tipo, cliente });
+      setInModifica(null);
       setCliente('');
       onCambiate();
     } catch (err) {
@@ -41,6 +63,7 @@ export default function SedutePt({ anno, mese, oggi, sedute, massimo, solaLettur
     setErrore('');
     try {
       await api.eliminaSedutaPt(s.id);
+      if (inModifica?.id === s.id) annullaModifica();
       onCambiate();
     } catch (err) {
       setErrore(err.message);
@@ -59,7 +82,8 @@ export default function SedutePt({ anno, mese, oggi, sedute, massimo, solaLettur
       </p>
 
       {!solaLettura && (
-        <form className="form-pt" onSubmit={aggiungi}>
+        <form className="form-pt" onSubmit={salva} ref={rifModulo}>
+          {inModifica && <p className="avviso">Stai modificando la seduta con {inModifica.cliente}.</p>}
           <div className="scelta" role="radiogroup" aria-label="Tipo di seduta">
             {TIPI.map((t) => (
               <button
@@ -100,7 +124,7 @@ export default function SedutePt({ anno, mese, oggi, sedute, massimo, solaLettur
           {pieno && (
             <p className="avviso">
               Hai già {massimo} sedute in {tipo} questo mese: il modello Excel ha spazio per {massimo} sedute per tipo,
-              quindi non se ne possono aggiungere altre.
+              quindi non se ne possono aggiungere altre{inModifica ? ' né spostarne qui' : ''}.
             </p>
           )}
           {errore && (
@@ -108,9 +132,20 @@ export default function SedutePt({ anno, mese, oggi, sedute, massimo, solaLettur
               {errore}
             </p>
           )}
-          <button type="submit" disabled={invio || pieno}>
-            Aggiungi seduta
-          </button>
+          {inModifica ? (
+            <div className="pulsanti">
+              <button type="button" className="neutro" onClick={annullaModifica}>
+                Annulla
+              </button>
+              <button type="submit" disabled={invio || pieno}>
+                Salva modifica
+              </button>
+            </div>
+          ) : (
+            <button type="submit" disabled={invio || pieno}>
+              Aggiungi seduta
+            </button>
+          )}
         </form>
       )}
       {solaLettura && errore && (
@@ -129,9 +164,20 @@ export default function SedutePt({ anno, mese, oggi, sedute, massimo, solaLettur
               <span className={`pt-tipo ${s.tipo}`}>{s.tipo}</span>
               <span className="pt-cliente">{s.cliente}</span>
               {!solaLettura && (
-                <button type="button" className="elimina" aria-label={`Elimina la seduta con ${s.cliente}`} onClick={() => elimina(s)}>
-                  ×
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="modifica"
+                    aria-label={`Modifica la seduta con ${s.cliente}`}
+                    aria-pressed={inModifica?.id === s.id}
+                    onClick={() => modifica(s)}
+                  >
+                    ✎
+                  </button>
+                  <button type="button" className="elimina" aria-label={`Elimina la seduta con ${s.cliente}`} onClick={() => elimina(s)}>
+                    ×
+                  </button>
+                </>
               )}
             </li>
           ))}

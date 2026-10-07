@@ -1,22 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api.js';
-import { GIORNI_BREVI, NOMI_MESI, etichettaData, giorniDelMese, maiuscola, meseVicino, numero, oggiIso } from './date.js';
+import { NOMI_MESI, etichettaData, maiuscola, meseVicino, numero, oggiIso } from './date.js';
 import Foglio from './Foglio.jsx';
 import SchedaGiorno from './SchedaGiorno.jsx';
 import SedutePt from './SedutePt.jsx';
-
-// Salva sul dispositivo un file ricevuto dall'API (anche da telefono: Safari e
-// Chrome rispettano l'attributo download sugli indirizzi blob).
-function salvaFile(blob, nomeFile) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = nomeFile;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
+import { ElencoGiorni, NavigazioneMese, TotaliMese, salvaFile, usaRiepilogo } from './VistaMese.jsx';
 
 const dalla = (data) => ({ anno: Number(data.slice(0, 4)), mese: Number(data.slice(5, 7)) });
 
@@ -69,32 +57,12 @@ export default function Mese({ attivita, mie }) {
   }
 
   const perId = useMemo(() => new Map(attivita.map((a) => [a.id, a])), [attivita]);
-  const giorni = useMemo(() => giorniDelMese(anno, mese), [anno, mese]);
-
-  const { perGiorno, totali } = useMemo(() => {
-    const ordine = (id) => perId.get(id)?.ordine ?? 0;
-    const perGiorno = new Map();
-    const perAttivita = new Map();
-    let ore = 0;
-    let sedute = 0;
-    for (const r of dati?.registrazioni ?? []) {
-      if (!perGiorno.has(r.data)) perGiorno.set(r.data, []);
-      perGiorno.get(r.data).push(r);
-      perAttivita.set(r.attivita_id, (perAttivita.get(r.attivita_id) ?? 0) + r.quantita);
-      if (perId.get(r.attivita_id)?.unita === 'sedute') sedute += r.quantita;
-      else ore += r.quantita;
-    }
-    for (const voci of perGiorno.values()) voci.sort((a, b) => ordine(a.attivita_id) - ordine(b.attivita_id));
-    const righe = [...perAttivita].sort(([a], [b]) => ordine(a) - ordine(b));
-    return { perGiorno, totali: { righe, ore, sedute } };
-  }, [dati, perId]);
+  const { perGiorno, totali } = usaRiepilogo(dati?.registrazioni, perId);
 
   const solaLettura = dati?.stato === 'inviato';
   const meseCorrente = dalla(oggi);
   const eMeseCorrente = meseCorrente.anno === anno && meseCorrente.mese === mese;
   const nomeMese = `${NOMI_MESI[mese - 1]} ${anno}`;
-  const nomeAttivita = (id) => perId.get(id)?.nome ?? '?';
-  const eSedute = (id) => perId.get(id)?.unita === 'sedute';
 
   async function apriPrecompilazione() {
     setAvviso('');
@@ -142,15 +110,11 @@ export default function Mese({ attivita, mie }) {
   return (
     <div className="mese">
       <div className="testata-mese">
-        <div className="navigazione-mese">
-          <button type="button" className="freccia" aria-label="Mese precedente" onClick={() => vaiA(meseVicino(anno, mese, -1))}>
-            ‹
-          </button>
-          <h1>{maiuscola(nomeMese)}</h1>
-          <button type="button" className="freccia" aria-label="Mese successivo" onClick={() => vaiA(meseVicino(anno, mese, 1))}>
-            ›
-          </button>
-        </div>
+        <NavigazioneMese
+          titolo={maiuscola(nomeMese)}
+          onPrecedente={() => vaiA(meseVicino(anno, mese, -1))}
+          onSuccessivo={() => vaiA(meseVicino(anno, mese, 1))}
+        />
         <div className="azioni-mese">
           <span className="riassunto">
             {dati && (
@@ -198,81 +162,18 @@ export default function Mese({ attivita, mie }) {
       {!dati && !errore && <p className="caricamento">Caricamento…</p>}
       {dati && (
         <>
-          <ol className="giorni">
-            {giorni.map(({ data, giorno, settimana }) => {
-              const voci = perGiorno.get(data) ?? [];
-              const ore = voci.reduce((t, v) => t + (eSedute(v.attivita_id) ? 0 : v.quantita), 0);
-              const classi = ['giorno'];
-              if (settimana === 6) classi.push('sabato');
-              if (settimana === 7) classi.push('domenica');
-              if (data === oggi) classi.push('oggi');
-              return (
-                <li key={data}>
-                  <button
-                    type="button"
-                    className={classi.join(' ')}
-                    ref={data === oggi ? rifOggi : null}
-                    aria-current={data === oggi ? 'date' : undefined}
-                    onClick={() => setGiornoAperto(data)}
-                  >
-                    <span className="giorno-data">
-                      <span className="giorno-numero">{giorno}</span>
-                      <span className="giorno-settimana">{GIORNI_BREVI[settimana - 1]}</span>
-                    </span>
-                    <span className="giorno-voci">
-                      {voci.length ? (
-                        voci.map((v) => (
-                          <span key={v.attivita_id} className="voce">
-                            {nomeAttivita(v.attivita_id)}{' '}
-                            <b>
-                              {numero(v.quantita)} {eSedute(v.attivita_id) ? 'sed.' : 'h'}
-                            </b>
-                          </span>
-                        ))
-                      ) : (
-                        <span className="vuoto">{data === oggi ? 'Oggi · tocca per inserire' : '—'}</span>
-                      )}
-                    </span>
-                    {ore > 0 && <span className="giorno-totale">{numero(ore)} h</span>}
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
+          <ElencoGiorni
+            anno={anno}
+            mese={mese}
+            perGiorno={perGiorno}
+            perId={perId}
+            oggi={oggi}
+            rifOggi={rifOggi}
+            onApri={setGiornoAperto}
+            testoVuotoOggi="Oggi · tocca per inserire"
+          />
 
-          <section className="sezione" aria-labelledby="titolo-totali">
-            <h2 id="titolo-totali">Totali di {nomeMese}</h2>
-            {totali.righe.length === 0 ? (
-              <p className="dettaglio">Nessuna registrazione in questo mese.</p>
-            ) : (
-              <table className="totali">
-                <tbody>
-                  {totali.righe.map(([id, q]) => (
-                    <tr key={id}>
-                      <th scope="row">{nomeAttivita(id)}</th>
-                      <td>
-                        {numero(q)} {eSedute(id) ? (q === 1 ? 'seduta' : 'sedute') : 'h'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <th scope="row">Totale ore</th>
-                    <td>{numero(totali.ore)} h</td>
-                  </tr>
-                  {totali.sedute > 0 && (
-                    <tr>
-                      <th scope="row">
-                        Totale sedute <small>(non incluse nelle ore)</small>
-                      </th>
-                      <td>{numero(totali.sedute)}</td>
-                    </tr>
-                  )}
-                </tfoot>
-              </table>
-            )}
-          </section>
+          <TotaliMese nomeMese={nomeMese} totali={totali} perId={perId} />
 
           <SedutePt
             anno={anno}

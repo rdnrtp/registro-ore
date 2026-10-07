@@ -21,7 +21,7 @@ async function chiama(percorso, opzioni = {}) {
   }
   const dati = await risposta.json().catch(() => ({}));
   // Sessione scaduta o utente disattivato: si torna alla pagina di accesso.
-  if (risposta.status === 401 && percorso !== '/auth/login') gestori.nonAutenticato?.();
+  if (risposta.status === 401 && percorso !== '/auth/login' && !percorso.startsWith('/inviti/')) gestori.nonAutenticato?.();
   if (!risposta.ok) throw new ErroreApi(dati.errore ?? 'Si è verificato un errore', risposta.status);
   return dati;
 }
@@ -78,5 +78,39 @@ export const api = {
   salvaOrarioTipo: (voci) => chiama('/orario-tipo', json('PUT', { voci })),
 
   aggiungiSedutaPt: (seduta) => chiama('/sedute-pt', json('POST', seduta)),
+  modificaSedutaPt: (id, seduta) => chiama(`/sedute-pt/${id}`, json('PUT', seduta)),
   eliminaSedutaPt: (id) => chiama(`/sedute-pt/${id}`, json('DELETE')),
+
+  // Link di invito (pubblici)
+  invito: (codice) => chiama(`/inviti/${encodeURIComponent(codice)}`),
+  usaInvito: (codice, password) => chiama(`/inviti/${encodeURIComponent(codice)}`, json('POST', { password })),
+
+  // Responsabile e amministratore: mesi degli altri, in sola lettura
+  collaboratori: (anno, mese) => chiama(`/collaboratori/${anno}/${mese}`),
+  meseDi: (id, anno, mese) => chiama(`/collaboratori/${id}/mese/${anno}/${mese}`),
+  excelDi: (id, anno, mese) => scaricaFile(`/collaboratori/${id}/mese/${anno}/${mese}/excel`),
+
+  // Amministratore
+  settori: () => chiama('/settori'),
+  utenti: () => chiama('/utenti'),
+  creaUtente: (dati) => chiama('/utenti', json('POST', dati)),
+  modificaUtente: (id, dati) => chiama(`/utenti/${id}`, json('PATCH', dati)),
+  nuovoInvito: (id) => chiama(`/utenti/${id}/invito`, json('POST')),
+  modificaAttivita: (id, dati) => chiama(`/attivita/${id}`, json('PATCH', dati)),
+  ordineAttivita: (ids) => chiama('/ordine-attivita', json('PUT', { attivita: ids })),
+  creaSettore: (dati) => chiama('/settori', json('POST', dati)),
+  modificaSettore: (id, dati) => chiama(`/settori/${id}`, json('PATCH', dati)),
+  eliminaSettore: (id) => chiama(`/settori/${id}`, json('DELETE')),
+  organizzazione: () => chiama('/organizzazione'),
+  modificaOrganizzazione: (dati) => chiama('/organizzazione', json('PATCH', dati)),
+  registroModifiche: (salta = 0) => chiama(`/registro-modifiche?salta=${salta}`),
+  modelli: () => chiama('/modello'),
+  fileModello: () => scaricaFile('/modello/file'),
+  // Il file va come corpo della richiesta, non in JSON.
+  caricaModello: (file, anteprima) =>
+    chiama(`/modello${anteprima ? '?anteprima=1' : ''}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream', 'X-Nome-File': encodeURIComponent(file.name) },
+      body: file,
+    }),
 };
