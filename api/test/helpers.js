@@ -13,6 +13,7 @@ const configTest = {
   port: 0,
   jwtSecret: 'segreto-dei-test-lungo-almeno-trentadue-caratteri',
   jwtDurataOre: 1,
+  invitoDurataOre: 72,
   cookieSecure: false,
   trustProxy: 0,
   login: { finestraMinuti: 15, maxFallitiPerEmail: 5, maxFallitiPerIp: 30 },

@@ -408,3 +408,79 @@ describe('le mie attività', () => {
     assert.deepEqual((await collab.get('/api/mie-attivita')).body.attivita, [A.attivitaOre2]);
   });
 });
+
+describe('modifica di una seduta di personal training', () => {
+  let pool, A, collab, admin;
+
+  before(async () => {
+    ({ pool, A, collab, admin } = await ambiente());
+    await pool.query('UPDATE organizations SET pt_sessions_per_kind = 2 WHERE id = $1', [A.id]);
+    await pool.query(
+      `INSERT INTO month_submissions (organization_id, user_id, year, month, status, submitted_at)
+       VALUES ($1, $2, 2026, 9, 'inviato', now())`,
+      [A.id, A.collaboratore.id],
+    );
+  });
+  after(() => pool.end());
+
+  const aggiungi = async (data, tipo, cliente) => {
+    const res = await collab.post('/api/sedute-pt').send({ data, tipo, cliente });
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    return res.body;
+  };
+  const modifica = (id, corpo, agente = collab) => agente.put(`/api/sedute-pt/${id}`).send(corpo);
+
+  it('cambia data, tipo e cliente', async () => {
+    const s = await aggiungi('2026-10-05', 'acqua', 'Cliente Uno');
+    const res = await modifica(s.id, { data: '2026-10-06', tipo: 'palestra', cliente: '  Cliente   Due ' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { id: s.id, data: '2026-10-06', tipo: 'palestra', cliente: 'Cliente Due' });
+    assert.deepEqual((await mese(collab, 2026, 10)).sedute_pt, [res.body]);
+  });
+
+  it('controlla i dati come l\'inserimento', async () => {
+    const [s] = (await mese(collab, 2026, 10)).sedute_pt;
+    for (const corpo of [
+      { data: '2026-10-32', tipo: 'acqua', cliente: 'X' },
+      { data: '2026-10-06', tipo: 'sauna', cliente: 'X' },
+      { data: '2026-10-06', tipo: 'acqua', cliente: '  ' },
+      { data: '2026-10-06', tipo: 'acqua', cliente: 'x'.repeat(101) },
+    ]) {
+      assert.equal((await modifica(s.id, corpo)).status, 400, JSON.stringify(corpo));
+    }
+  });
+
+  it('rispetta il limite di sedute per tipo, senza contare quella che si modifica', async () => {
+    const [prima] = (await mese(collab, 2026, 10)).sedute_pt; // palestra
+    await aggiungi('2026-10-07', 'palestra', 'Cliente Tre');
+    await aggiungi('2026-10-08', 'acqua', 'Cliente Quattro');
+    await aggiungi('2026-10-09', 'acqua', 'Cliente Cinque');
+    // Palestra ne ha 2 su 2: modificare una di quelle resta possibile.
+    assert.equal((await modifica(prima.id, { data: '2026-10-10', tipo: 'palestra', cliente: 'Cliente Due' })).status, 200);
+    // Spostarla su acqua, che ne ha già 2, no.
+    const piena = await modifica(prima.id, { data: '2026-10-10', tipo: 'acqua', cliente: 'Cliente Due' });
+    assert.equal(piena.status, 400);
+    assert.match(piena.body.errore, /spazio per 2 sedute/);
+  });
+
+  it('non tocca un mese inviato, né per partire né per arrivare', async () => {
+    const [s] = (await mese(collab, 2026, 10)).sedute_pt;
+    const verso = await modifica(s.id, { data: '2026-09-10', tipo: s.tipo, cliente: s.cliente });
+    assert.equal(verso.status, 409);
+    const { rows } = await pool.query(
+      `INSERT INTO pt_sessions (organization_id, user_id, session_date, kind, client_name)
+       VALUES ($1, $2, '2026-09-10', 'acqua', 'Settembre') RETURNING id`,
+      [A.id, A.collaboratore.id],
+    );
+    const da = await modifica(rows[0].id, { data: '2026-10-20', tipo: 'acqua', cliente: 'Settembre' });
+    assert.equal(da.status, 409);
+    assert.match(da.body.errore, /settembre 2026 è già stato inviato/);
+  });
+
+  it('la seduta di un altro utente risponde 404', async () => {
+    const [s] = (await mese(collab, 2026, 10)).sedute_pt;
+    const res = await modifica(s.id, { data: '2026-10-11', tipo: 'acqua', cliente: 'Preso' }, admin);
+    assert.equal(res.status, 404);
+    assert.equal((await mese(collab, 2026, 10)).sedute_pt.find((x) => x.id === s.id).cliente, s.cliente);
+  });
+});
