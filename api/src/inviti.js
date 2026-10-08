@@ -1,4 +1,7 @@
 const crypto = require('node:crypto');
+const { accodaEmail } = require('./posta/coda');
+const { emailInvito } = require('./posta/messaggi');
+const { NOME_APP } = require('./notifiche');
 
 // Codice del link di invito: 32 byte casuali. Nel database va solo l'hash,
 // quindi il link si vede una volta sola, quando viene creato.
@@ -22,4 +25,29 @@ async function creaInvito(db, { organizzazioneId, utenteId, creatoDa, durataOre 
   return { codice, scadenza: rows[0].expires_at };
 }
 
-module.exports = { creaInvito, hashCodice, CODICE };
+// Manda il link per email all'interessato (nella stessa transazione in cui
+// il link è stato creato). Il link resta visibile anche all'amministratore.
+// Il testo dell'email, che contiene il link, viene cancellato dopo l'invio.
+async function accodaEmailInvito(db, config, { organizzazioneId, utente, invito, reimposta }) {
+  const { rows } = await db.query('SELECT name FROM organizations WHERE id = $1', [organizzazioneId]);
+  const organizzazione = rows[0].name;
+  const { oggetto, testo } = emailInvito({
+    nome: utente.nome,
+    organizzazione,
+    url: `${config.appUrl}/#/invito/${invito.codice}`,
+    scadenza: invito.scadenza,
+    reimposta,
+  });
+  return accodaEmail(db, {
+    organizzazioneId,
+    tipo: 'invito',
+    utenteId: utente.id,
+    nomeMittente: `${organizzazione} · ${NOME_APP}`,
+    a: [utente.email],
+    oggetto,
+    testo,
+    riservata: true,
+  });
+}
+
+module.exports = { creaInvito, accodaEmailInvito, hashCodice, CODICE };

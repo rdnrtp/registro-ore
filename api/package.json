@@ -11,6 +11,7 @@
     "migra": "node src/cli/migra.js",
     "crea-admin": "node src/cli/crea-admin.js",
     "carica-organizzazione": "node src/cli/carica-organizzazione.js",
+    "simula-promemoria": "node src/cli/simula-promemoria.js",
     "test": "node --test --test-concurrency=1 \"test/**/*.test.js\""
   },
   "dependencies": {
@@ -20,6 +21,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.1",
     "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^10.0.16",
     "pg": "^8.23.1"
   },
   "devDependencies": {

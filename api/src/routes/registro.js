@@ -2,6 +2,7 @@ const express = require('express');
 const { transazione } = require('../db');
 const { ErroreHttp } = require('../errori');
 const { NOMI_MESI, isUuid, giorniNelMese, leggiAnnoMese, leggiData, numeroIt } = require('../validazione');
+const { elencoInvii } = require('../invio-mese');
 
 const MAX_ORE_GIORNO = 24;
 const TIPI_PT = ['acqua', 'palestra'];
@@ -109,7 +110,7 @@ function rotteRegistro({ pool, config }) {
     const u = req.utente;
     const periodo = `AND $3::date <= %s AND %s < ($3::date + interval '1 month')`;
     const inizio = `${anno}-${String(mese).padStart(2, '0')}-01`;
-    const [registrazioni, sedute, stato, org] = await Promise.all([
+    const [registrazioni, sedute, stato, org, invii] = await Promise.all([
       pool.query(`${SELECT_REGISTRAZIONI} ${periodo.replaceAll('%s', 'entry_date')} ORDER BY entry_date`, [
         u.id,
         u.organizzazioneId,
@@ -124,6 +125,7 @@ function rotteRegistro({ pool, config }) {
       ),
       statoMese(pool, u, anno, mese),
       pool.query('SELECT pt_sessions_per_kind FROM organizations WHERE id = $1', [u.organizzazioneId]),
+      elencoInvii(pool, { orgId: u.organizzazioneId, utenteId: u.id, anno, mese }),
     ]);
     res.json({
       anno,
@@ -132,6 +134,8 @@ function rotteRegistro({ pool, config }) {
       max_sedute_pt_per_tipo: org.rows[0]?.pt_sessions_per_kind,
       registrazioni: registrazioni.rows,
       sedute_pt: sedute.rows,
+      // Versioni inviate, dalla più recente (vuoto se il mese non è mai stato inviato).
+      invii,
     });
   });
 

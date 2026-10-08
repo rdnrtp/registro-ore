@@ -2,7 +2,7 @@ const express = require('express');
 const { RUOLI, richiediRuolo } = require('../auth');
 const { transazione } = require('../db');
 const { ErroreHttp } = require('../errori');
-const { creaInvito } = require('../inviti');
+const { creaInvito, accodaEmailInvito } = require('../inviti');
 const { traccia, differenze } = require('../traccia');
 const { isUuid, leggiTesto, leggiEmail } = require('../validazione');
 
@@ -18,7 +18,7 @@ function rotteUtenti({ pool, config }) {
 
   const SELECT_UTENTE = `
     SELECT u.id, u.email, u.first_name AS nome, u.last_name AS cognome, u.role AS ruolo, u.active AS attivo,
-           u.password_hash IS NOT NULL AS password_impostata,
+           u.password_hash IS NOT NULL AS password_impostata, u.submission_exempt AS esonerato_invio,
            COALESCE((SELECT array_agg(m.sector_id ORDER BY s.sort_order, s.name)
                        FROM sector_managers m
                        JOIN sectors s ON s.id = m.sector_id AND s.organization_id = m.organization_id
@@ -68,6 +68,12 @@ function rotteUtenti({ pool, config }) {
     return rows.map((r) => r.name);
   }
 
+  // Booleano facoltativo: undefined se assente, 400 se non è true o false.
+  function leggiBooleano(valore, campo) {
+    if (valore !== undefined && typeof valore !== 'boolean') throw nonValido(`Valore di "${campo}" non valido`);
+    return valore;
+  }
+
   function leggiRuolo(valore) {
     if (!RUOLI.includes(valore)) throw nonValido('Ruolo non valido: collaboratore, responsabile o amministratore');
     return valore;
@@ -91,13 +97,15 @@ function rotteUtenti({ pool, config }) {
   });
 
   // Crea l'utente senza password e restituisce il link di invito.
-  // Corpo: { nome, cognome, email, ruolo, settori: [id] } (settori solo per il responsabile)
+  // Corpo: { nome, cognome, email, ruolo, settori: [id], esonerato_invio? } (settori solo per il responsabile)
+  // Il link viene anche mandato per email all'interessato.
   router.post('/utenti', async (req, res) => {
     const b = req.body ?? {};
     const nome = leggiTesto(b.nome, 'Nome', 100);
     const cognome = leggiTesto(b.cognome, 'Cognome', 100);
     const email = leggiEmail(b.email);
     const ruolo = leggiRuolo(b.ruolo);
+    const esonerato = leggiBooleano(b.esonerato_invio, 'esonerato_invio') ?? false;
     const org = req.utente.organizzazioneId;
 
     const risultato = await transazione(pool, async (client) => {
@@ -105,9 +113,9 @@ function rotteUtenti({ pool, config }) {
       await emailLibera(client, email);
       const settori = ruolo === 'responsabile' ? await verificaSettori(client, org, b.settori ?? []) : { ids: [], nomi: [] };
       const { rows } = await client.query(
-        `INSERT INTO users (organization_id, email, first_name, last_name, role)
-         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-        [org, email, nome, cognome, ruolo],
+        `INSERT INTO users (organization_id, email, first_name, last_name, role, submission_exempt)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [org, email, nome, cognome, ruolo, esonerato],
       );
       const id = rows[0].id;
       await impostaSettori(client, org, id, settori.ids);
@@ -117,13 +125,15 @@ function rotteUtenti({ pool, config }) {
         creatoDa: req.utente.id,
         durataOre: config.invitoDurataOre,
       });
+      invito.email = email;
+      await accodaEmailInvito(client, config, { organizzazioneId: org, utente: { id, email, nome }, invito, reimposta: false });
       await traccia(client, {
         organizzazioneId: org,
         utente: req.utente,
         azione: 'utente.creato',
         tipo: 'utente',
         id,
-        dettagli: { email, nome, cognome, ruolo, settori: settori.nomi },
+        dettagli: { email, nome, cognome, ruolo, settori: settori.nomi, ...(esonerato && { esonerato_invio: true }) },
       });
       return { utente: await leggiUtente(client, org, id), invito };
     });
@@ -131,13 +141,15 @@ function rotteUtenti({ pool, config }) {
   });
 
   // Modifica anagrafica, ruolo, settori, stato attivo. Tutti i campi sono facoltativi.
-  // Corpo: { nome?, cognome?, email?, ruolo?, settori?, attivo? }
+  // Corpo: { nome?, cognome?, email?, ruolo?, settori?, attivo?, esonerato_invio? }
+  // esonerato_invio = non deve inviare il mese (fuori dal quadro degli invii e dai promemoria).
   router.patch('/utenti/:id', async (req, res) => {
     if (!isUuid(req.params.id)) throw nonTrovato();
     const b = req.body ?? {};
     const org = req.utente.organizzazioneId;
     const id = req.params.id;
-    if (b.attivo !== undefined && typeof b.attivo !== 'boolean') throw nonValido('Valore di "attivo" non valido');
+    leggiBooleano(b.attivo, 'attivo');
+    leggiBooleano(b.esonerato_invio, 'esonerato_invio');
 
     const aggiornato = await transazione(pool, async (client) => {
       await bloccaOrganizzazione(client, org);
@@ -149,6 +161,7 @@ function rotteUtenti({ pool, config }) {
         email: b.email === undefined ? prima.email : leggiEmail(b.email),
         ruolo: b.ruolo === undefined ? prima.ruolo : leggiRuolo(b.ruolo),
         attivo: b.attivo ?? prima.attivo,
+        esonerato_invio: b.esonerato_invio ?? prima.esonerato_invio,
       };
       if (dopo.email !== prima.email) await emailLibera(client, dopo.email, id);
       // I settori contano solo per il responsabile: con un altro ruolo si tolgono.
@@ -171,10 +184,10 @@ function rotteUtenti({ pool, config }) {
       }
 
       await client.query(
-        `UPDATE users SET first_name = $3, last_name = $4, email = $5, role = $6, active = $7,
+        `UPDATE users SET first_name = $3, last_name = $4, email = $5, role = $6, active = $7, submission_exempt = $8,
                           token_version = token_version + CASE WHEN $7 THEN 0 ELSE 1 END
           WHERE id = $1 AND organization_id = $2`,
-        [id, org, dopo.nome, dopo.cognome, dopo.email, dopo.ruolo, dopo.attivo],
+        [id, org, dopo.nome, dopo.cognome, dopo.email, dopo.ruolo, dopo.attivo, dopo.esonerato_invio],
       );
       if (!dopo.attivo) {
         // Un utente disattivato non deve poter usare un link già creato.
@@ -195,8 +208,20 @@ function rotteUtenti({ pool, config }) {
         });
       }
       const diff = differenze(
-        { nome: prima.nome, cognome: prima.cognome, email: prima.email, settori: await nomiSettori(client, org, prima.settori) },
-        { nome: dopo.nome, cognome: dopo.cognome, email: dopo.email, settori: await nomiSettori(client, org, settori) },
+        {
+          nome: prima.nome,
+          cognome: prima.cognome,
+          email: prima.email,
+          settori: await nomiSettori(client, org, prima.settori),
+          esonerato_invio: prima.esonerato_invio,
+        },
+        {
+          nome: dopo.nome,
+          cognome: dopo.cognome,
+          email: dopo.email,
+          settori: await nomiSettori(client, org, settori),
+          esonerato_invio: dopo.esonerato_invio,
+        },
       );
       if (Object.keys(diff).length) await traccia(client, { ...base, azione: 'utente.modificato', dettagli: { ...chi, ...diff } });
       return leggiUtente(client, org, id);
@@ -221,6 +246,8 @@ function rotteUtenti({ pool, config }) {
         creatoDa: req.utente.id,
         durataOre: config.invitoDurataOre,
       });
+      nuovo.email = u.email;
+      await accodaEmailInvito(client, config, { organizzazioneId: org, utente: u, invito: nuovo, reimposta: u.password_impostata });
       await traccia(client, {
         organizzazioneId: org,
         utente: req.utente,

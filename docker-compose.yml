@@ -41,6 +41,17 @@ services:
       LOGIN_FINESTRA_MINUTI: ${LOGIN_FINESTRA_MINUTI:-15}
       LOGIN_MAX_FALLITI_PER_EMAIL: ${LOGIN_MAX_FALLITI_PER_EMAIL:-5}
       LOGIN_MAX_FALLITI_PER_IP: ${LOGIN_MAX_FALLITI_PER_IP:-30}
+      # Indirizzo dell'app per i link nelle email (inviti, avvisi, promemoria).
+      APP_URL: ${APP_URL:-http://localhost:8088}
+      # Posta in uscita. Senza altre indicazioni va alla casella finta
+      # "mailpit" qui sotto: nessuna email esce davvero.
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      POSTA_MITTENTE: ${POSTA_MITTENTE:-registro-ore@localhost}
+      POSTA_MAX_TENTATIVI: ${POSTA_MAX_TENTATIVI:-8}
     volumes:
       # Dati privati dell'impianto (fuori da git), letti dai comandi di caricamento.
       - ./modello:/dati/modello:ro
@@ -53,6 +64,16 @@ services:
       - api
     ports:
       - "${HTTP_PORT:-8088}:80"
+
+  # Casella di posta finta per lo sviluppo: riceve tutte le email dell'API e
+  # le mostra in una pagina web (http://localhost:8025). Non inoltra nulla.
+  # Raggiungibile solo da questo computer (127.0.0.1): le email contengono
+  # link di invito personali. Il servizio di posta vero si sceglie nella Fase 6.
+  mailpit:
+    image: axllent/mailpit:v1.31.4
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
 
   # Test automatici, su un database separato (registro_ore_test) nello stesso
   # PostgreSQL. Si avvia solo esplicitamente: docker compose run --rm api-test

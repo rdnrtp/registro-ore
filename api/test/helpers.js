@@ -6,6 +6,7 @@ const { creaPool } = require('../src/db');
 const { creaApp } = require('../src/app');
 const { eseguiMigrazioni } = require('../src/migrazioni');
 const { hashPassword } = require('../src/password');
+const { elaboraCoda } = require('../src/posta/coda');
 
 const PASSWORD = 'password-di-prova-123';
 
@@ -17,6 +18,9 @@ const configTest = {
   cookieSecure: false,
   trustProxy: 0,
   login: { finestraMinuti: 15, maxFallitiPerEmail: 5, maxFallitiPerIp: 30 },
+  appUrl: 'http://app.test',
+  posta: { host: null, porta: 25, sicura: false, mittente: 'registro@app.test', intervalloSecondi: 1, maxTentativi: 3 },
+  promemoriaIntervalloSecondi: 60,
 };
 
 async function creaDatabaseSeManca(nome) {
@@ -103,4 +107,52 @@ async function accedi(app, email, password = PASSWORD) {
   return agente;
 }
 
-module.exports = { PASSWORD, configTest, preparaAmbiente, nuovaApp, accedi };
+// Server di posta finto: registra i messaggi "inviati". guasta(fn) fa
+// fallire gli invii: fn(messaggio) restituisce l'errore da lanciare (o null).
+function trasportoFinto() {
+  const t = {
+    inviate: [],
+    guasto: null,
+    ritardoMs: 0,
+    guasta(fn) {
+      t.guasto = fn;
+    },
+    async sendMail(messaggio) {
+      if (t.ritardoMs) await new Promise((r) => setTimeout(r, t.ritardoMs));
+      const errore = t.guasto?.(messaggio);
+      if (errore) throw errore;
+      t.inviate.push(messaggio);
+      return { messageId: messaggio.messageId };
+    },
+  };
+  return t;
+}
+
+// Errori come li produce nodemailer.
+const erroreConnessione = () => Object.assign(new Error('connect ECONNREFUSED 10.0.0.1:25'), { code: 'ECONNECTION' });
+const erroreRifiuto = () => Object.assign(new Error('Mailbox unavailable'), { responseCode: 550, response: '550 5.1.1 Mailbox unavailable' });
+
+// Invia le email in coda con il trasporto indicato.
+const elabora = (pool, trasporto, config = configTest) => elaboraCoda(pool, { trasporto, config });
+
+// Email in coda di un'organizzazione, dalla più vecchia.
+async function emailInCoda(pool, orgId, tipo = null) {
+  const { rows } = await pool.query(
+    `SELECT * FROM email_outbox WHERE organization_id = $1 AND ($2::text IS NULL OR kind = $2) ORDER BY created_at, id`,
+    [orgId, tipo],
+  );
+  return rows;
+}
+
+module.exports = {
+  PASSWORD,
+  configTest,
+  preparaAmbiente,
+  nuovaApp,
+  accedi,
+  trasportoFinto,
+  erroreConnessione,
+  erroreRifiuto,
+  elabora,
+  emailInCoda,
+};

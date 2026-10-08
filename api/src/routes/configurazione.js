@@ -343,27 +343,52 @@ function rotteConfigurazione({ pool }) {
   // ------------------------------------------------------ Organizzazione
 
   const SELECT_ORGANIZZAZIONE = `
-    SELECT name AS nome, slug, submission_email AS email_invio, pt_sessions_per_kind AS max_sedute_pt_per_tipo
+    SELECT name AS nome, slug, submission_email AS email_invio, pt_sessions_per_kind AS max_sedute_pt_per_tipo,
+           json_build_object('giorni', reminder_days, 'ultimo_giorno', reminder_last_day, 'ora', reminder_hour) AS promemoria
       FROM organizations WHERE id = $1`;
 
   router.get('/organizzazione', soloAdmin, async (req, res) => {
     res.json((await pool.query(SELECT_ORGANIZZAZIONE, [req.utente.organizzazioneId])).rows[0]);
   });
 
-  // Corpo: { email_invio } = indirizzo a cui si inviano i file mensili.
+  // { giorni: [1..31], ultimo_giorno: boolean, ora: 0..23 }
+  function leggiPromemoria(p) {
+    if (!p || typeof p !== 'object') throw nonValido('Promemoria non validi');
+    const { giorni, ultimo_giorno: ultimo, ora } = p;
+    if (!Array.isArray(giorni) || giorni.length > 31 || !giorni.every((g) => Number.isInteger(g) && g >= 1 && g <= 31)) {
+      throw nonValido('Giorni dei promemoria non validi: numeri da 1 a 31');
+    }
+    if (typeof ultimo !== 'boolean') throw nonValido('Valore di "ultimo_giorno" non valido');
+    if (!Number.isInteger(ora) || ora < 0 || ora > 23) throw nonValido('Ora dei promemoria non valida: da 0 a 23');
+    return { giorni: [...new Set(giorni)].sort((a, b) => a - b), ultimo_giorno: ultimo, ora };
+  }
+
+  // Corpo: { email_invio?, promemoria? }. email_invio = indirizzo a cui si
+  // inviano i file mensili; promemoria = giorni e ora dei promemoria automatici.
   router.patch('/organizzazione', soloAdmin, async (req, res) => {
     const org = req.utente.organizzazioneId;
-    const email = leggiEmail(req.body?.email_invio);
+    const b = req.body ?? {};
+    const email = b.email_invio === undefined ? undefined : leggiEmail(b.email_invio);
+    const promemoria = b.promemoria === undefined ? undefined : leggiPromemoria(b.promemoria);
     await transazione(pool, async (client) => {
-      const { rows } = await client.query('SELECT submission_email FROM organizations WHERE id = $1 FOR UPDATE', [org]);
-      if (rows[0].submission_email === email) return;
-      await client.query('UPDATE organizations SET submission_email = $2 WHERE id = $1', [org, email]);
-      await traccia(client, {
-        organizzazioneId: org,
-        utente: req.utente,
-        azione: 'organizzazione.modificata',
-        dettagli: { email_invio: { prima: rows[0].submission_email, dopo: email } },
-      });
+      const { rows } = await client.query(
+        `SELECT submission_email, reminder_days, reminder_last_day, reminder_hour FROM organizations WHERE id = $1 FOR UPDATE`,
+        [org],
+      );
+      const r = rows[0];
+      const prima = {
+        email_invio: r.submission_email,
+        promemoria: { giorni: r.reminder_days, ultimo_giorno: r.reminder_last_day, ora: r.reminder_hour },
+      };
+      const dopo = { email_invio: email ?? prima.email_invio, promemoria: promemoria ?? prima.promemoria };
+      const diff = differenze(prima, dopo);
+      if (!Object.keys(diff).length) return;
+      await client.query(
+        `UPDATE organizations SET submission_email = $2, reminder_days = $3, reminder_last_day = $4, reminder_hour = $5
+          WHERE id = $1`,
+        [org, dopo.email_invio, dopo.promemoria.giorni, dopo.promemoria.ultimo_giorno, dopo.promemoria.ora],
+      );
+      await traccia(client, { organizzazioneId: org, utente: req.utente, azione: 'organizzazione.modificata', dettagli: diff });
     });
     res.json((await pool.query(SELECT_ORGANIZZAZIONE, [org])).rows[0]);
   });

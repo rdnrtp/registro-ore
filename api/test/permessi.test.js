@@ -93,6 +93,12 @@ describe('permessi per ruolo', () => {
     ['get', '/api/modello'],
     ['get', '/api/modello/file'],
     ['post', '/api/modello'],
+    // Fase 5
+    ['get', '/api/email'],
+    ['post', `/api/email/${A.collaboratore.id}/riprova`],
+    ['post', `/api/collaboratori/${A.collega.id}/mese/2026/10/riapertura`],
+    ['post', `/api/collaboratori/${A.collega.id}/mese/2026/10/sollecito`],
+    ['get', `/api/collaboratori/${A.collega.id}/mese/2026/10/invii/1/file`],
   ];
 
   describe('collaboratore', () => {
