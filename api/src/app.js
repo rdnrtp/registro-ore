@@ -14,6 +14,22 @@ const { rotteInvio } = require('./routes/invio');
 const { rottePosta } = require('./routes/posta');
 const { rotteBacheca } = require('./routes/bacheca');
 const { ErroreHttp } = require('./errori');
+const { statoApp } = require('./stato');
+const { ultimiGiri } = require('./avvio');
+
+// Difesa in più contro le richieste partite da altri siti (oltre al cookie
+// SameSite=Lax): una modifica con un'intestazione Origin diversa
+// dall'indirizzo dell'app è respinta. Solo in produzione, dove l'indirizzo è
+// uno solo (in sviluppo l'app si apre anche da IP e porte diverse).
+function stessaOrigine(appUrl) {
+  const origine = new URL(appUrl).origin;
+  return (req, res, next) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+    const arrivo = req.get('origin');
+    if (arrivo && arrivo !== origine) return res.status(403).json({ errore: 'Richiesta non consentita' });
+    next();
+  };
+}
 
 function creaApp({ pool, config }) {
   const app = express();
@@ -21,10 +37,21 @@ function creaApp({ pool, config }) {
   app.set('trust proxy', config.trustProxy);
   app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());
+  if (config.produzione) app.use('/api', stessaOrigine(config.appUrl));
 
+  // Controllo interno di Docker: l'API risponde e il database anche.
   app.get('/api/salute', async (req, res) => {
-    await pool.query('SELECT 1');
-    res.json({ ok: true });
+    try {
+      await pool.query('SELECT 1');
+      res.json({ ok: true });
+    } catch {
+      res.status(503).json({ ok: false });
+    }
+  });
+  // Per il monitoraggio esterno: anche posta e lavori in sottofondo.
+  app.get('/api/stato', async (req, res) => {
+    const stato = await statoApp(pool, ultimiGiri);
+    res.set('Cache-Control', 'no-store').status(stato.ok ? 200 : 503).json(stato);
   });
   // Rotte pubbliche: accesso, uscita (/me si protegge da sé) e link di invito.
   app.use('/api/auth', rotteAuth({ pool, config }));

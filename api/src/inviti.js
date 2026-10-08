@@ -35,6 +35,7 @@ async function accodaEmailInvito(db, config, { organizzazioneId, utente, invito,
     nome: utente.nome,
     organizzazione,
     url: `${config.appUrl}/#/invito/${invito.codice}`,
+    privacy: `${config.appUrl}/#/privacy`,
     scadenza: invito.scadenza,
     reimposta,
   });

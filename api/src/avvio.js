@@ -4,6 +4,10 @@ const { elaboraCoda } = require('./posta/coda');
 const { creaTrasporto } = require('./posta/trasporto');
 const { eseguiPromemoria } = require('./promemoria');
 
+// Ultimo giro concluso di ogni lavoro (anche con errore): lo legge /api/stato
+// per accorgersi di un lavoro fermo. Vuoto finché i lavori non partono (test).
+const ultimiGiri = new Map();
+
 function ripeti(nome, secondi, fn) {
   let inCorso = false;
   const giro = async () => {
@@ -14,6 +18,7 @@ function ripeti(nome, secondi, fn) {
     } catch (err) {
       console.error(`${nome}: ${err.message}`);
     } finally {
+      ultimiGiri.set(nome, Date.now());
       inCorso = false;
     }
   };
@@ -44,4 +49,4 @@ function avviaLavori(pool, config) {
   return () => fermate.forEach((f) => f());
 }
 
-module.exports = { avviaLavori };
+module.exports = { avviaLavori, ultimiGiri };

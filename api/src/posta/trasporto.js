@@ -9,6 +9,8 @@ function creaTrasporto(posta) {
     host: posta.host,
     port: posta.porta,
     secure: posta.sicura,
+    // Sulla porta 587 rifiuta di proseguire se il server non offre STARTTLS.
+    requireTLS: Boolean(posta.richiediTls && !posta.sicura),
     auth: posta.utente ? { user: posta.utente, pass: posta.password ?? '' } : undefined,
     // Tempi brevi: un invio non deve restare appeso oltre il tempo massimo
     // previsto dalla coda (10 minuti).

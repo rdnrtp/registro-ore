@@ -169,6 +169,7 @@ describe('posta in uscita', () => {
       const m = t.inviate[0];
       assert.equal(m.subject, 'Registro ore – Impianto A: il tuo accesso');
       assert.ok(m.text.includes(`http://app.test/#/invito/${res.body.invito.codice}`));
+      assert.ok(m.text.includes('http://app.test/#/privacy'));
       assert.match(m.text, /^Ciao Nuovo,/);
       // Dopo l'invio il link non resta nel database.
       const dopo = (await emailInCoda(pool, A.id, 'invito'))[0];

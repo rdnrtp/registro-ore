@@ -8,7 +8,7 @@ const { NOME_APP } = require('../notifiche');
 const nomeMese = (anno, mese) => `${NOMI_MESI[mese - 1]} ${anno}`;
 
 // Link per scegliere la password (nuovo utente o password dimenticata).
-function emailInvito({ nome, organizzazione, url, scadenza, reimposta }) {
+function emailInvito({ nome, organizzazione, url, privacy, scadenza, reimposta }) {
   const oggetto = reimposta
     ? `${NOME_APP} – ${organizzazione}: link per reimpostare la password`
     : `${NOME_APP} – ${organizzazione}: il tuo accesso`;
@@ -25,6 +25,8 @@ function emailInvito({ nome, organizzazione, url, scadenza, reimposta }) {
     reimposta
       ? 'Se non hai chiesto tu di reimpostare la password, ignora questa email: la password attuale resta valida.'
       : "Se non ti aspettavi questa email, ignorala.",
+    '',
+    `Come vengono trattati i tuoi dati: ${privacy}`,
     '',
     '—',
     `${organizzazione} · ${NOME_APP}`,

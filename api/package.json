@@ -12,6 +12,7 @@
     "crea-admin": "node src/cli/crea-admin.js",
     "carica-organizzazione": "node src/cli/carica-organizzazione.js",
     "simula-promemoria": "node src/cli/simula-promemoria.js",
+    "avviso-sistema": "node src/cli/avviso-sistema.js",
     "test": "node --test --test-concurrency=1 \"test/**/*.test.js\""
   },
   "dependencies": {
@@ -27,5 +28,10 @@
   "devDependencies": {
     "jszip": "^3.10.2",
     "supertest": "^7.3.1"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "^11.1.1"
+    }
   }
 }
