@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Funzioni comuni agli script di deploy/. Si include con:
 #   source "$(dirname "${BASH_SOURCE[0]}")/comune.sh"
 
