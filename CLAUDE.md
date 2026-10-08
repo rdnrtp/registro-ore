@@ -47,12 +47,24 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
 - Ore a passi di mezz'ora.
 - Il modello contiene indirizzi email reali: repository privato, e i dati reali di
   BV (modello, file generati) non vanno in file tracciati da git. Vedi `.gitignore`.
+- Fase 5: l'app invia le email via SMTP (nodemailer), sempre attraverso una coda
+  nel database (`email_outbox`) elaborata dall'API in sottofondo, mai dentro la
+  richiesta dell'utente. In sviluppo la posta va alla casella finta Mailpit del
+  Compose; il servizio vero si sceglie nella Fase 6.
+- Notifiche agli utenti (promemoria, solleciti, avvisi, riaperture) solo
+  attraverso `notifica()` (`src/notifiche.js`), che le salva e le consegna con
+  ogni canale di `CANALI`: oggi l'email; nella Fase 6 il push sarà un secondo
+  canale, senza toccare chi notifica.
+- Un mese inviato conserva il file esattamente come è partito
+  (`month_submission_versions`); dopo una riapertura il reinvio è una nuova
+  versione e l'email dice che sostituisce la precedente.
 
 ## Struttura
 
 - `docker-compose.yml`: servizi `db` (PostgreSQL 17), `api` (Node/Express),
   `web` (React compilato, servito da nginx che inoltra `/api` all'API),
-  `api-test` (profilo `test`, avviato solo con `docker compose run`).
+  `mailpit` (casella di posta finta, pagina web su http://localhost:8025, solo
+  da questo PC), `api-test` (profilo `test`, avviato solo con `docker compose run`).
   Configurazione in `.env` (non tracciato), modello in `.env.example`.
 - `api/`: `src/app.js` (Express; rotte pubbliche, poi `autenticato` per tutto
   il resto di `/api`), `src/auth.js` (JWT, middleware `autenticato` e
@@ -60,12 +72,20 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   pubblici; `organizzazione` = elenco attività e settori; `registro` = ore,
   orario tipo, mie attività, sedute PT; `esportazione` = proprio file Excel e
   `fileExcelMese`; `collaboratori` = viste in sola lettura sui mesi degli
-  altri; `utenti`, `configurazione` (attività, settori, organizzazione,
-  registro delle modifiche) e `modello` = gestione, solo amministratore),
+  altri, più riapertura e sollecito; `invio` = riepilogo e invio del proprio
+  mese; `bacheca` = avvisi; `utenti`, `configurazione` (attività, settori,
+  organizzazione e promemoria, registro delle modifiche), `modello` e `posta`
+  (email in uscita) = gestione, solo amministratore),
   `src/excel/` (`layout.js` = mappa delle celle e sua validazione,
   `foglio-mensile.js` = generatore, `modello.js` = caricamento di un modello:
   righe, confronto con le attività, prova di generazione, nuova versione;
-  usato dal comando e dall'app), `src/inviti.js` (creazione dei link),
+  usato dal comando e dall'app), `src/inviti.js` (creazione dei link e
+  loro email), `src/posta/` (`coda.js` = `accodaEmail`, `elaboraCoda`;
+  `trasporto.js` = nodemailer; `messaggi.js` = testi di invito e invio del
+  mese), `src/notifiche.js` (`notifica`, canali), `src/invio-mese.js`
+  (destinatari e versioni inviate), `src/promemoria.js`, `src/avvio.js`
+  (lavori in sottofondo: coda email e promemoria, avviati da `server.js`),
+  `src/tempo.js` (ora italiana),
   `src/traccia.js` (`audit_log`), `src/errori.js` (`ErroreHttp`),
   `src/validazione.js` (uuid, date, mesi, testi, email), `src/db.js`
   (`transazione`), `src/cli/` (comandi da terminale),
@@ -79,9 +99,12 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   `#/` = `Mese.jsx`, `#/attivita` = `MieAttivita.jsx`, `#/orario` =
   `OrarioTipo.jsx`, `#/collaboratori/AAAA/M` = `Collaboratori.jsx`,
   `#/collaboratori/<id>/AAAA/M` = `MeseCollaboratore.jsx` (sola lettura),
-  `#/gestione[/utenti|attivita|settori|impianto|registro]` = `Gestione.jsx` e
-  `Gestione*.jsx`, `RegistroModifiche.jsx`. `VistaMese.jsx` = parti comuni
-  alle viste del mese (elenco dei giorni, totali, `salvaFile`).
+  `#/bacheca[/<id>]` = `Bacheca.jsx` (contatore dei non letti nella barra),
+  `#/gestione[/utenti|attivita|settori|bacheca|impianto|email|registro]` =
+  `Gestione.jsx` e `Gestione*.jsx`, `RegistroModifiche.jsx`. `VistaMese.jsx`
+  = parti comuni alle viste del mese (elenco dei giorni, totali, `salvaFile`);
+  `StatoInvio.jsx` = stato dell'invio e versioni inviate (proprio mese e mese
+  di un collega).
   `SchedaGiorno.jsx`, la precompilazione e le schede di gestione usano
   `Foglio.jsx` (pannello dal basso); `EditorQuantita.jsx` (contatori − valore
   + ) serve sia alla scheda del giorno sia all'orario tipo; `SedutePt.jsx`
@@ -99,7 +122,15 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
 ## Comandi (da PowerShell, nella radice del progetto)
 
 - Avvio: `docker compose up -d --build` → http://localhost:8088 (`HTTP_PORT`).
-- Migrazioni: `docker compose exec api npm run migra`
+- Migrazioni: `docker compose exec api npm run migra` (subito dopo l'avvio: fino
+  ad allora i lavori in sottofondo scrivono errori nel log, poi riprendono).
+- Casella di posta finta: http://localhost:8025 (`MAILPIT_PORT`). Tutte le
+  email dell'app arrivano lì; non ne esce nessuna. I link nelle email usano
+  `APP_URL` (predefinito http://localhost:8088).
+- Promemoria di un giorno a scelta: `docker compose exec api npm run
+  simula-promemoria -- --org bv --data 2026-10-25` (senza `--data` = oggi). Fa
+  il giro di quel giorno come se fosse passata l'ora; i giri simulati sono
+  separati da quelli veri, e lo stesso giorno simulato due volte non riparte.
 - Crea un impianto nuovo: `docker compose exec api npm run carica-organizzazione -- bv`
   (legge le attività dal modello Excel e salva modello + mappa nel database).
   Su un impianto già esistente si rifiuta, perché cancellerebbe le modifiche
@@ -168,6 +199,43 @@ Migrazione `004_multiutente.sql`:
   `details` jsonb con i valori prima/dopo. Scritta nella stessa transazione
   della modifica (`src/traccia.js`).
 
+Migrazione `005_posta.sql`:
+
+- `notifications`: notifica a un utente (tipo, titolo, testo, link
+  dell'app), `dedup_key` unica per utente (stesso promemoria mai due volte).
+- `email_outbox`: coda delle email. Stati `in_attesa` → `in_invio` →
+  `inviata` | `in_attesa` (nuovo tentativo) | `errore`. `attempts`,
+  `next_attempt_at`, `locked_until`, `last_error`; `references_id` = email
+  precedente (In-Reply-To); `attachment_submission_id` = file allegato (un
+  invio del mese, non copiato); `sensitive` = contiene un link di invito, il
+  testo viene cancellato dopo l'invio.
+
+Migrazione `006_invio_mese.sql`:
+
+- `month_submission_versions`: ogni invio di un mese = `version` 1, 2, …,
+  `file` (bytea, esattamente quello spedito), `file_name`, `file_sha256`,
+  `template_version`, `to_address`, `cc_addresses`, totali, `submitted_at`;
+  `reopened_at/by`, `reopen_reason` sulla versione riaperta. Un trigger
+  impedisce di cambiare file e destinatari. Lo stato corrente resta in
+  `month_submissions` (riaperto = `aperto` con versioni).
+
+Migrazione `007_promemoria.sql`:
+
+- `users.submission_exempt` = non deve inviare il mese (fuori dal quadro e
+  dai promemoria).
+- `organizations.reminder_days` (predefinito {25,28}), `reminder_last_day`
+  (true), `reminder_hour` (9, ora italiana).
+- `reminder_runs`: giro di promemoria fatto (organizzazione, giorno,
+  `simulated`), scritto nella stessa transazione delle notifiche.
+
+Migrazione `008_bacheca.sql`:
+
+- `announcements` (titolo, testo, `important`, `for_everyone`,
+  `published_at`, `updated_at` = ultima modifica, `withdrawn_at` = ritirato),
+  `announcement_sectors`, `announcement_revisions` (testo prima di ogni
+  modifica, con i destinatari di allora), `announcement_reads` (ultima
+  apertura; letto = aperto dopo l'ultima modifica).
+
 Chiavi primarie UUID. Ogni tabella con dati di un impianto ha `organization_id`;
 le chiavi esterne tra tabelle dell'organizzazione sono composte
 `(id, organization_id)`, così il database rifiuta collegamenti tra
@@ -206,6 +274,12 @@ mai modificare uno già applicato.
   giorno, limite sedute, mese inviato) non si aggirano con richieste parallele.
 - Mese con `month_submissions.status = 'inviato'`: ogni modifica di ore e
   sedute di quel mese risponde 409. Il blocco è nell'API, non nel database.
+- Email: solo con `accodaEmail` (o `notifica`), nella stessa transazione della
+  modifica che le causa; mai `sendMail` dentro una richiesta. Nei testi il
+  minimo di dati personali (nome, mese; niente ore giorno per giorno né
+  clienti). I link usano `config.appUrl`, mai l'host della richiesta.
+- Riapertura, invio e sollecito bloccano la riga dell'utente interessato
+  (`FOR NO KEY UPDATE`) come le modifiche alle ore: non si incrociano.
 
 ## API della Fase 2 (`src/routes/registro.js`)
 
@@ -283,11 +357,88 @@ Solo amministratore:
   sedute): stessi controlli dell'inserimento, mese di partenza e di arrivo
   aperti.
 
+## API della Fase 5
+
+Invio del proprio mese (`src/routes/invio.js`, tutti):
+
+- `GET /api/mese/:anno/:mese/invio` → riepilogo `{ stato, nome_file,
+  destinatario, copia, totali: { ore, sedute, sedute_pt }, avvisi: {
+  mese_futuro, mese_non_finito, giorni_mancanti, vuoto }, sostituisce }`.
+- `POST /api/mese/:anno/:mese/invio`: genera il file, lo salva come nuova
+  versione con destinatari e ora, mette in coda l'email, segna il mese
+  inviato. 409 se già inviato o se manca l'indirizzo della segreteria.
+  Destinatario = `organizations.submission_email`; copia = `manager_emails`
+  dei settori delle attività con quantità nel mese (`time_entries`, non le
+  sedute PT con cliente) + l'utente; i responsabili "nell'app"
+  (`sector_managers`) non contano. Mittente "Nome Cognome tramite Registro
+  ore", risposta all'utente. Il reinvio dopo una riapertura ha oggetto
+  "SOSTITUISCE IL PRECEDENTE – …" e In-Reply-To dell'email precedente.
+- `GET /api/mese/:anno/:mese` contiene `invii` (versioni, dalla più recente,
+  con `email: { stato, inviata_il, errore }`).
+- `GET /api/mese/:anno/:mese/invii/:versione/file`: una versione inviata.
+
+Amministratore, in `collaboratori.js`:
+
+- `GET /api/collaboratori/:anno/:mese`: in più `esonerato`, `inviato_il`,
+  `versione`, `riaperto`, `manca` (attivo, non esonerato, non inviato),
+  `password_impostata`, `ultimo_sollecito` (gli ultimi quattro solo
+  all'amministratore). Gli esonerati compaiono solo se hanno dati nel mese.
+- `GET /api/collaboratori/:id/mese/:anno/:mese`: in più `inviato_il` e
+  `invii` (null per il responsabile).
+- `GET …/invii/:versione/file`, `POST …/riapertura` `{ motivazione }`
+  (traccia `mese.riaperto`, notifica all'utente), `POST …/sollecito`
+  (notifica a nome dell'amministratore, risposta a lui; 409 se ha già
+  inviato, esonerato, disattivato, senza password, o sollecitato da meno di
+  10 minuti; traccia `mese.sollecitato`).
+
+Bacheca (`src/routes/bacheca.js`):
+
+- Destinatari di un avviso, calcolati al momento: tutti gli utenti attivi,
+  oppure chi ha tra "Le mie attività" un'attività di uno dei settori, più i
+  responsabili (`sector_managers`) di quei settori.
+- Tutti: `GET /api/avvisi` (i propri, non ritirati), `GET
+  /api/avvisi/non-letti` → `{ non_letti, importanti }`, `GET /api/avvisi/:id`
+  (con `versioni_precedenti`), `POST /api/avvisi/:id/letto`. Un avviso non
+  destinato all'utente o ritirato = 404 (l'amministratore li apre tutti).
+- Amministratore: `GET /api/avvisi/gestione` (tutti, con `destinatari` e
+  `letti`), `POST /api/avvisi` `{ titolo, testo, importante?, per_tutti,
+  settori? }` (notifica ai destinatari tranne l'autore, solo titolo e link),
+  `PATCH /api/avvisi/:id` (salva la versione precedente, torna "da leggere";
+  nessuna nuova email), `POST /api/avvisi/:id/ritiro`, `GET
+  /api/avvisi/:id/letture` → `{ letto, non_letto }`. Tracce `avviso.*`.
+
+Altro (amministratore):
+
+- `GET /api/email?salta=N&stato=in_attesa|inviata|errore` (100 alla volta),
+  `POST /api/email/:id/riprova` (solo in errore e senza link di invito;
+  traccia `email.riprovata`).
+- `PATCH /api/organizzazione` accetta anche `promemoria: { giorni: [1..31],
+  ultimo_giorno, ora }`; `PATCH /api/utenti/:id` (e il POST) accetta
+  `esonerato_invio`. Creazione utente e nuovo link mandano il link per email
+  (`invito.email` = indirizzo).
+
+Coda e promemoria (`src/posta/coda.js`, `src/promemoria.js`):
+
+- `elaboraCoda` ogni `POSTA_INTERVALLO_SECONDI` (5): prende una riga con
+  `FOR UPDATE SKIP LOCKED`, la segna `in_invio` e fa COMMIT prima di
+  contattare il server. Errore temporaneo (connessione, 4xx) = nuovo tentativo
+  dopo 1, 2, 4… minuti (massimo un'ora), fino a `POSTA_MAX_TENTATIVI` (8);
+  5xx = errore subito. Una riga `in_invio` oltre 10 minuti (API fermata
+  durante l'invio) passa a errore senza nuovo tentativo, per non mandarla due
+  volte. Message-ID = `<id della riga@dominio del mittente>`.
+- `eseguiPromemoria` ogni minuto: per ogni organizzazione, se oggi (ora
+  italiana) è un giorno di promemoria (un giorno oltre la fine del mese vale
+  come ultimo) ed è passata l'ora, e il giro non è in `reminder_runs`,
+  notifica chi è attivo, non esonerato, con password e senza il mese corrente
+  inviato. Server spento all'ora prevista = recupero più tardi nello stesso
+  giorno, mai nei giorni dopo.
+
 ## Esportazione Excel (Fase 3, `src/routes/esportazione.js`, `src/excel/`)
 
 - `GET /api/mese/:anno/:mese/excel` → file `.xlsx` del mese dell'utente
   autenticato (`Content-Disposition: attachment`, `Cache-Control: no-store`),
-  per mesi aperti e inviati. Per l'amministratore anche quello di un altro
+  per mesi aperti e inviati: un mese inviato restituisce il file salvato
+  all'invio, identico byte per byte; uno aperto (anche riaperto) è generato ora. Per l'amministratore anche quello di un altro
   (`collaboratori.js`); la generazione è `fileExcelMese`. Letture in una transazione REPEATABLE READ.
   Errori: 400 mese non valido, 503 organizzazione senza modello, 500 se il
   modello non corrisponde ai dati (`ErroreModello`, messaggio esplicito).
@@ -310,6 +461,9 @@ Solo amministratore:
   a destra) non entrano in nessun totale. Da chiarire con BV.
 - Sedute PT nelle tabelle in ordine di data (a parità, di inserimento), data
   come data Excel con formato `dd/mm/yyyy`.
+- Test: `test/invio.test.js` (invio del mese, sul modello reale di BV),
+  `test/posta.test.js`, `test/promemoria.test.js`, `test/bacheca.test.js`.
+  Le email nei test passano da `trasportoFinto()` (`test/helpers.js`).
 - Test: `test/excel.test.js` genera e rilegge i file sul modello reale di BV
   e li confronta con il modello (celle unite, larghezze, altezze, stampa,
   stili cella per cella, regolamento, `fullCalcOnLoad`).
@@ -321,7 +475,7 @@ Solo amministratore:
 2. Inserimento ore — **completata**
 3. Esportazione Excel — **completata**
 4. Multiutente e ruoli — **completata**
-5. Chiusura mese, invio email, promemoria
+5. Chiusura mese, invio email, promemoria, bacheca — **completata**
 6. Stabilità e deploy sul VPS
 7. Riepilogo per la direzione
 
