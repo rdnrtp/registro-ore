@@ -11,12 +11,24 @@ const NOMI_CAMPI = {
   attiva: 'in uso',
   email_responsabili: 'email dei responsabili',
   responsabili: 'responsabili',
+  esonerato_invio: 'non deve inviare il mese',
+  email_invio: 'indirizzo di invio',
+  promemoria: 'promemoria',
+  titolo: 'titolo',
+  testo: 'testo',
+  importante: 'importante',
+  destinatari: 'destinatari',
 };
 
 function valore(v) {
   if (v === null || v === undefined || v === '') return '—';
   if (typeof v === 'boolean') return v ? 'sì' : 'no';
   if (Array.isArray(v)) return v.length ? v.join(', ') : 'nessuno';
+  // Promemoria: { giorni, ultimo_giorno, ora }
+  if (typeof v === 'object' && 'giorni' in v) {
+    const giorni = [...v.giorni, ...(v.ultimo_giorno ? ['ultimo'] : [])];
+    return `giorni ${giorni.join(', ') || 'nessuno'} alle ${v.ora}`;
+  }
   return String(v);
 }
 
@@ -60,7 +72,19 @@ function descrivi({ azione, dettagli: d }) {
     case 'settore.eliminato':
       return `ha eliminato il settore «${d.settore}»`;
     case 'organizzazione.modificata':
-      return `ha cambiato l'indirizzo di invio delle ore: ${differenze(d)}`;
+      return `ha cambiato la configurazione dell'impianto: ${differenze(d)}`;
+    case 'mese.riaperto':
+      return `ha riaperto il mese ${d.mese}/${d.anno} di ${persona} (versione ${d.versione} inviata). Motivazione: «${d.motivazione}»`;
+    case 'mese.sollecitato':
+      return `ha sollecitato ${persona} a inviare il mese ${d.mese}/${d.anno}`;
+    case 'avviso.pubblicato':
+      return `ha pubblicato l'avviso «${d.titolo}» per ${(d.destinatari ?? []).join(', ')}${d.importante ? ' (importante)' : ''}`;
+    case 'avviso.modificato':
+      return `ha modificato l'avviso «${d.avviso}»: ${differenze(d)}`;
+    case 'avviso.ritirato':
+      return `ha ritirato l'avviso «${d.avviso}»`;
+    case 'email.riprovata':
+      return `ha rimesso in coda l'email «${d.oggetto}»`;
     case 'modello.caricato':
       return `ha caricato il modello Excel versione ${d.versione} (${d.nome_file})`;
     case 'organizzazione.creata_da_terminale':

@@ -226,10 +226,103 @@ function IndirizzoInvio() {
   );
 }
 
+const ORE = Array.from({ length: 24 }, (_, i) => i);
+
+// Promemoria automatici a chi non ha ancora inviato il mese.
+function Promemoria() {
+  const [conf, setConf] = useState(null);
+  const [giorni, setGiorni] = useState('');
+  const [ultimo, setUltimo] = useState(true);
+  const [ora, setOra] = useState(9);
+  const [errore, setErrore] = useState('');
+  const [avviso, setAvviso] = useState('');
+  const [invio, setInvio] = useState(false);
+
+  const mostra = (p) => {
+    setConf(p);
+    setGiorni(p.giorni.join(', '));
+    setUltimo(p.ultimo_giorno);
+    setOra(p.ora);
+  };
+  useEffect(() => {
+    api
+      .organizzazione()
+      .then((o) => mostra(o.promemoria))
+      .catch((err) => setErrore(err.message));
+  }, []);
+
+  async function salva(evento) {
+    evento.preventDefault();
+    setErrore('');
+    setAvviso('');
+    const elenco = giorni
+      .split(/[\s,;]+/)
+      .filter(Boolean)
+      .map(Number);
+    if (elenco.some((g) => !Number.isInteger(g) || g < 1 || g > 31)) {
+      setErrore('Scrivi i giorni come numeri da 1 a 31, separati da virgole.');
+      return;
+    }
+    setInvio(true);
+    try {
+      const o = await api.modificaOrganizzazione({ promemoria: { giorni: elenco, ultimo_giorno: ultimo, ora: Number(ora) } });
+      mostra(o.promemoria);
+      setAvviso('Salvato.');
+    } catch (err) {
+      setErrore(err.message);
+    }
+    setInvio(false);
+  }
+
+  return (
+    <section className="sezione-gestione" aria-labelledby="titolo-promemoria">
+      <h2 id="titolo-promemoria">Promemoria automatici</h2>
+      <p className="dettaglio">
+        Email a chi non ha ancora inviato il mese in corso (tranne chi non deve inviarlo). Se il server è spento all&apos;ora
+        prevista, partono appena riparte, ma solo nello stesso giorno.
+      </p>
+      <form className="form-gestione" onSubmit={salva}>
+        <label>
+          Giorni del mese (un giorno che il mese non ha vale come ultimo giorno)
+          <input value={giorni} onChange={(e) => setGiorni(e.target.value)} inputMode="numeric" placeholder="25, 28" />
+        </label>
+        <label className="opzione">
+          <input type="checkbox" checked={ultimo} onChange={(e) => setUltimo(e.target.checked)} />
+          <span>Anche l&apos;ultimo giorno del mese</span>
+        </label>
+        <label>
+          Ora (ora italiana)
+          <select value={ora} onChange={(e) => setOra(e.target.value)}>
+            {ORE.map((h) => (
+              <option key={h} value={h}>
+                {String(h).padStart(2, '0')}:00
+              </option>
+            ))}
+          </select>
+        </label>
+        {errore && (
+          <p className="errore" role="alert">
+            {errore}
+          </p>
+        )}
+        {avviso && (
+          <p className="conferma" role="status">
+            {avviso}
+          </p>
+        )}
+        <button type="submit" disabled={invio || !conf}>
+          Salva promemoria
+        </button>
+      </form>
+    </section>
+  );
+}
+
 export default function GestioneImpianto({ onAttivitaCambiate }) {
   return (
     <>
       <IndirizzoInvio />
+      <Promemoria />
       <ModelloExcel onAttivitaCambiate={onAttivitaCambiate} />
     </>
   );

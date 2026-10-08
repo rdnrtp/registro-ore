@@ -1063,3 +1063,285 @@ button.modifica[aria-pressed='true'] {
   background: var(--colore-principale);
   color: #fff;
 }
+
+/* ------------------------------------------------------------ Fase 5 */
+
+:root {
+  --colore-importante: #9a3412;
+  --colore-importante-sfondo: #ffedd5;
+}
+
+/* Barra delle sezioni con sei voci (amministratore). */
+.schede.molte a {
+  font-size: 0.78rem;
+  padding: 4px 2px;
+}
+
+.schede a {
+  position: relative;
+}
+
+.contatore-schede {
+  display: inline-block;
+  min-width: 20px;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--colore-errore);
+  color: #fff;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.schede.molte .contatore-schede {
+  position: absolute;
+  top: 6px;
+  right: 4px;
+  margin: 0;
+}
+
+button.invia {
+  background: var(--colore-conferma);
+}
+
+.riepilogo-invio td.a-capo {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.indirizzo {
+  display: block;
+}
+
+.stato-invio p,
+.stato-invio .avviso p {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+
+.stato-email.errore {
+  color: var(--colore-errore);
+  font-weight: 600;
+}
+
+.stato-email.in_attesa {
+  color: var(--colore-testo-sabato);
+}
+
+.elenco-invii {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.elenco-invii li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--colore-bordo);
+  overflow-wrap: anywhere;
+}
+
+.elenco-invii small {
+  display: block;
+  color: var(--colore-secondario);
+}
+
+.elenco-invii button.collegamento {
+  align-self: flex-start;
+  min-height: 36px;
+  text-align: left;
+}
+
+/* Quadro degli invii: riga da toccare più il pulsante "Sollecita". */
+.elenco-persone.quadro li {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.elenco-persone.quadro li > a {
+  flex: 1;
+  min-width: 0;
+}
+
+button.sollecita {
+  min-height: 0;
+  padding: 0 10px;
+  font-size: 0.85rem;
+  background: var(--colore-scheda);
+}
+
+.etichetta.manca {
+  background: #fde2e1;
+  color: var(--colore-errore);
+}
+
+.etichetta.riaperto {
+  background: var(--colore-avviso-sfondo);
+  color: var(--colore-testo-sabato);
+}
+
+label.opzione.filtro {
+  padding: 0;
+  font-weight: 600;
+  align-items: center;
+}
+
+label.opzione.filtro input {
+  margin: 0;
+}
+
+/* Bacheca */
+.elenco-avvisi {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+
+.elenco-avvisi li {
+  margin-bottom: 6px;
+}
+
+.elenco-avvisi a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--colore-scheda);
+  color: var(--colore-testo);
+  text-decoration: none;
+}
+
+.elenco-avvisi a.da-leggere {
+  box-shadow: inset 4px 0 0 var(--colore-principale);
+}
+
+.elenco-avvisi a.da-leggere .avviso-titolo {
+  font-weight: 700;
+}
+
+.avviso-titolo {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.avviso-titolo small {
+  display: block;
+  font-weight: 400;
+  color: var(--colore-secondario);
+  font-size: 0.85rem;
+}
+
+.etichetta.importante {
+  background: var(--colore-importante-sfondo);
+  color: var(--colore-importante);
+}
+
+.etichetta.nuovo {
+  background: #e0eef5;
+  color: var(--colore-principale);
+}
+
+.testo-avviso {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.avviso-aperto .etichetta.importante {
+  display: inline-block;
+}
+
+.versioni-avviso {
+  padding-left: 20px;
+}
+
+.versioni-avviso li {
+  margin: 10px 0;
+}
+
+.versioni-avviso small {
+  display: block;
+  color: var(--colore-secondario);
+}
+
+.elenco-avvisi.gestione li {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--colore-scheda);
+}
+
+.elenco-avvisi.gestione li.spento {
+  opacity: 0.65;
+}
+
+.elenco-avvisi.gestione .avviso-titolo .etichetta {
+  margin-left: 6px;
+}
+
+.azioni-avviso {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin-top: 6px;
+}
+
+button.pericolo-testo {
+  color: var(--colore-pericolo);
+}
+
+.elenco-letture {
+  margin: 4px 0 12px;
+  padding-left: 20px;
+}
+
+.elenco-letture small {
+  color: var(--colore-secondario);
+}
+
+/* Email inviate */
+.filtri {
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.etichetta.stato-errore {
+  background: #fde2e1;
+  color: var(--colore-errore);
+}
+
+.etichetta.stato-inviata {
+  background: #dcefe2;
+  color: var(--colore-conferma);
+}
+
+.etichetta.stato-in_attesa {
+  background: var(--colore-avviso-sfondo);
+  color: var(--colore-testo-sabato);
+}
+
+select {
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--colore-bordo);
+  border-radius: 8px;
+  background: var(--colore-scheda);
+  color: var(--colore-testo);
+}
+
+.riassunto .etichetta {
+  display: inline-block;
+  margin-left: 8px;
+  text-transform: none;
+}

@@ -47,8 +47,8 @@ function LinkInvito({ invito, persona, onChiudi }) {
       }
     >
       <p>
-        Manda questo link a <b>{persona.nome}</b> con il mezzo che preferisci (messaggio, email…). Aprendolo sceglierà la
-        propria password e accederà con l&apos;email <b>{persona.email}</b>.
+        Il link è stato mandato per email a <b>{invito.email ?? persona.email}</b>. Se non arriva, mandalo a{' '}
+        <b>{persona.nome}</b> con un altro mezzo (messaggio…): aprendolo sceglierà la propria password e accederà con quell&apos;email.
       </p>
       <input ref={campo} className="link-invito" type="text" value={url} readOnly onFocus={(e) => e.target.select()} />
       <p className="dettaglio">
@@ -59,7 +59,7 @@ function LinkInvito({ invito, persona, onChiudi }) {
   );
 }
 
-function SceltaSettori({ settori, scelti, onCambia }) {
+export function SceltaSettori({ settori, scelti, onCambia }) {
   if (!settori.length) return <p className="dettaglio">Non ci sono settori: creali nella pagina Settori.</p>;
   return (
     <ul className="scelte-attivita">
@@ -87,6 +87,7 @@ function SchedaUtente({ utente, settori, io, onSalvato, onChiudi, onLink }) {
     email: utente?.email ?? '',
     ruolo: utente?.ruolo ?? 'collaboratore',
     settori: utente?.settori ?? [],
+    esonerato_invio: utente?.esonerato_invio ?? false,
   }));
   const [errore, setErrore] = useState('');
   const [invio, setInvio] = useState(false);
@@ -146,7 +147,7 @@ function SchedaUtente({ utente, settori, io, onSalvato, onChiudi, onLink }) {
               Annulla
             </button>
             <button type="submit" form="form-utente" disabled={invio}>
-              {utente ? 'Salva' : 'Crea e mostra il link'}
+              {utente ? 'Salva' : 'Crea e manda il link'}
             </button>
           </div>
         </>
@@ -182,6 +183,16 @@ function SchedaUtente({ utente, settori, io, onSalvato, onChiudi, onLink }) {
             </label>
           ))}
         </fieldset>
+        <label className="opzione">
+          <input
+            type="checkbox"
+            checked={dati.esonerato_invio}
+            onChange={(e) => setDati({ ...dati, esonerato_invio: e.target.checked })}
+          />
+          <span>
+            Non deve inviare il mese <small>per esempio chi non lavora a ore: niente promemoria e fuori dal quadro degli invii</small>
+          </span>
+        </label>
         {dati.ruolo === 'responsabile' && (
           <fieldset>
             <legend>Responsabile dei settori</legend>
@@ -267,6 +278,7 @@ export default function GestioneUtenti({ utente: io }) {
                   <small>Settori: {u.settori.length ? u.settori.map((id) => nomeSettore.get(id)).join(', ') : 'nessuno'}</small>
                 )}
                 {statoAccesso(u) && <small className="nota">{statoAccesso(u)}</small>}
+                {u.esonerato_invio && <small>non deve inviare il mese</small>}
               </span>
               <span className={`etichetta ${u.ruolo}`}>{u.ruolo}</span>
             </button>

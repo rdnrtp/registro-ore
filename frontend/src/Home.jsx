@@ -8,6 +8,7 @@ import OrarioTipo from './OrarioTipo.jsx';
 import Collaboratori from './Collaboratori.jsx';
 import MeseCollaboratore from './MeseCollaboratore.jsx';
 import Gestione from './Gestione.jsx';
+import Bacheca from './Bacheca.jsx';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -17,6 +18,7 @@ const UUID = /^[0-9a-f-]{36}$/i;
 function sezioni(ruolo) {
   const elenco = [
     { chiave: '', hash: '#/', nome: 'Mese', breve: 'Mese' },
+    { chiave: 'bacheca', hash: '#/bacheca', nome: 'Bacheca', breve: 'Bacheca' },
     { chiave: 'attivita', hash: '#/attivita', nome: 'Le mie attività', breve: 'Attività' },
     { chiave: 'orario', hash: '#/orario', nome: 'Orario tipo', breve: 'Orario' },
   ];
@@ -40,8 +42,26 @@ export default function Home({ sessione, onEsci }) {
   const [attivita, setAttivita] = useState(null);
   const [mie, setMie] = useState(null);
   const [errore, setErrore] = useState('');
+  const [nonLetti, setNonLetti] = useState(0);
 
   const caricaAttivita = useCallback(() => api.attivita().then(setAttivita), []);
+  const contaNonLetti = useCallback(
+    () =>
+      api
+        .avvisiNonLetti()
+        .then((d) => setNonLetti(d.non_letti))
+        .catch(() => {}),
+    [],
+  );
+
+  // Contatore degli avvisi non letti: a ogni cambio di pagina e ogni minuto.
+  useEffect(() => {
+    contaNonLetti();
+  }, [contaNonLetti, rotta[0]]);
+  useEffect(() => {
+    const timer = setInterval(contaNonLetti, 60_000);
+    return () => clearInterval(timer);
+  }, [contaNonLetti]);
 
   useEffect(() => {
     Promise.all([api.attivita(), api.mieAttivita()])
@@ -65,6 +85,8 @@ export default function Home({ sessione, onEsci }) {
     );
   } else if (!attivita) {
     contenuto = <p className="caricamento">Caricamento…</p>;
+  } else if (sezione === 'bacheca') {
+    contenuto = <Bacheca aperto={UUID.test(rotta[1] ?? '') ? rotta[1] : null} utente={utente} onLetto={contaNonLetti} />;
   } else if (sezione === 'attivita') {
     contenuto = <MieAttivita attivita={attivita} mie={mie} onSalvate={setMie} />;
   } else if (sezione === 'orario') {
@@ -96,10 +118,15 @@ export default function Home({ sessione, onEsci }) {
         </button>
       </header>
       <main>{contenuto}</main>
-      <nav className="schede" aria-label="Sezioni">
+      <nav className={`schede${elenco.length > 5 ? ' molte' : ''}`} aria-label="Sezioni">
         {elenco.map((s) => (
           <a key={s.hash} href={s.hash} aria-current={sezione === s.chiave ? 'page' : undefined}>
             {etichetta(s)}
+            {s.chiave === 'bacheca' && nonLetti > 0 && (
+              <span className="contatore-schede" aria-label={`${nonLetti} da leggere`}>
+                {nonLetti}
+              </span>
+            )}
           </a>
         ))}
       </nav>

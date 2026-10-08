@@ -4,6 +4,8 @@ import { NOMI_MESI, etichettaData, maiuscola, meseVicino, numero, oggiIso } from
 import Foglio from './Foglio.jsx';
 import SchedaGiorno from './SchedaGiorno.jsx';
 import SedutePt from './SedutePt.jsx';
+import StatoInvio from './StatoInvio.jsx';
+import { dataOra } from './GestioneUtenti.jsx';
 import { ElencoGiorni, NavigazioneMese, TotaliMese, salvaFile, usaRiepilogo } from './VistaMese.jsx';
 
 const dalla = (data) => ({ anno: Number(data.slice(0, 4)), mese: Number(data.slice(5, 7)) });
@@ -19,6 +21,8 @@ export default function Mese({ attivita, mie }) {
   const [precompilazione, setPrecompilazione] = useState(null);
   const [scaricando, setScaricando] = useState(false);
   const [avvisoVuoto, setAvvisoVuoto] = useState(false);
+  const [invio, setInvio] = useState(null); // riepilogo prima dell'invio
+  const [inviando, setInviando] = useState(false);
   const rifOggi = useRef(null);
   const daPosizionare = useRef(true);
   const { anno, mese } = periodo;
@@ -104,6 +108,39 @@ export default function Mese({ attivita, mie }) {
     }
   }
 
+  async function apriInvio() {
+    setAvviso('');
+    setErrore('');
+    try {
+      setInvio(await api.riepilogoInvio(anno, mese));
+    } catch (err) {
+      setErrore(err.message);
+    }
+  }
+
+  async function confermaInvio() {
+    setInviando(true);
+    try {
+      await api.inviaMese(anno, mese);
+      setAvviso(`Mese inviato. L'email con il file parte tra pochi secondi: lo stato è qui sotto.`);
+    } catch (err) {
+      setErrore(err.message);
+    }
+    setInviando(false);
+    setInvio(null);
+    ricarica();
+  }
+
+  async function scaricaVersione(versione) {
+    setErrore('');
+    try {
+      const { blob, nomeFile } = await api.fileInviato(anno, mese, versione);
+      salvaFile(blob, nomeFile ?? `${anno}-${mese}.xlsx`);
+    } catch (err) {
+      setErrore(err.message);
+    }
+  }
+
   const nGiorni = precompilazione?.giorni.length ?? 0;
   const parolaGiorni = nGiorni === 1 ? 'giorno' : 'giorni';
 
@@ -126,6 +163,8 @@ export default function Mese({ attivita, mie }) {
                     <b>{numero(totali.sedute)}</b> sedute
                   </>
                 )}
+                {solaLettura && <span className="etichetta inviato">inviato il {dataOra(dati.invii[0]?.inviato_il ?? Date.now())}</span>}
+                {!solaLettura && dati.invii.length > 0 && <span className="etichetta riaperto">riaperto: da inviare di nuovo</span>}
               </>
             )}
           </span>
@@ -144,6 +183,11 @@ export default function Mese({ attivita, mie }) {
               Precompila il mese
             </button>
           )}
+          {dati && !solaLettura && (
+            <button type="button" className="piccolo invia" onClick={apriInvio}>
+              {dati.invii.length ? 'Invia di nuovo' : 'Invia il mese'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -157,7 +201,11 @@ export default function Mese({ attivita, mie }) {
           {avviso}
         </p>
       )}
-      {solaLettura && <p className="avviso riquadro">Il mese è già stato inviato: i dati sono in sola lettura.</p>}
+      {solaLettura && (
+        <p className="avviso riquadro">
+          Il mese è stato inviato: i dati sono in sola lettura. Per una correzione chiedi all&apos;amministratore di riaprirlo.
+        </p>
+      )}
 
       {!dati && !errore && <p className="caricamento">Caricamento…</p>}
       {dati && (
@@ -172,6 +220,8 @@ export default function Mese({ attivita, mie }) {
             onApri={setGiornoAperto}
             testoVuotoOggi="Oggi · tocca per inserire"
           />
+
+          <StatoInvio stato={dati.stato} invii={dati.invii} io onScarica={scaricaVersione} />
 
           <TotaliMese nomeMese={nomeMese} totali={totali} perId={perId} />
 
@@ -225,6 +275,16 @@ export default function Mese({ attivita, mie }) {
         </Foglio>
       )}
 
+      {invio && (
+        <RiepilogoInvio
+          invio={invio}
+          nomeMese={nomeMese}
+          inviando={inviando}
+          onChiudi={() => setInvio(null)}
+          onConferma={confermaInvio}
+        />
+      )}
+
       {precompilazione && (
         <Foglio
           titolo="Precompila il mese"
@@ -267,5 +327,92 @@ export default function Mese({ attivita, mie }) {
         </Foglio>
       )}
     </div>
+  );
+}
+
+// Riepilogo prima dell'invio: cosa parte e a chi. Gli avvisi (mese non finito,
+// mese vuoto) non impediscono di inviare.
+function RiepilogoInvio({ invio, nomeMese, inviando, onChiudi, onConferma }) {
+  const { totali, avvisi } = invio;
+  return (
+    <Foglio
+      titolo={invio.sostituisce ? 'Invia di nuovo il mese' : 'Invia il mese'}
+      onChiudi={onChiudi}
+      piede={
+        <div className="pulsanti">
+          <button type="button" className="neutro" onClick={onChiudi}>
+            Annulla
+          </button>
+          <button type="button" onClick={onConferma} disabled={inviando || !invio.destinatario}>
+            {inviando ? 'Invio…' : 'Invia'}
+          </button>
+        </div>
+      }
+    >
+      {avvisi.mese_futuro && <p className="avviso">{maiuscola(nomeMese)} non è ancora cominciato.</p>}
+      {!avvisi.mese_futuro && avvisi.mese_non_finito && avvisi.giorni_mancanti > 0 && (
+        <p className="avviso">
+          Il mese non è ancora finito: mancano {avvisi.giorni_mancanti} {avvisi.giorni_mancanti === 1 ? 'giorno' : 'giorni'}. Dopo
+          l&apos;invio non potrai più aggiungere ore: servirà che l&apos;amministratore riapra il mese.
+        </p>
+      )}
+      {!avvisi.mese_futuro && avvisi.mese_non_finito && avvisi.giorni_mancanti === 0 && (
+        <p className="avviso">Oggi è l&apos;ultimo giorno del mese: se oggi lavori ancora, registra prima le ore di oggi.</p>
+      )}
+      {avvisi.vuoto && (
+        <p className="avviso">
+          In {nomeMese} non hai registrato nessuna ora: il file avrà la griglia vuota
+          {totali.sedute_pt > 0 ? ` e solo le sedute di personal training (${totali.sedute_pt})` : ''}.
+        </p>
+      )}
+      {invio.sostituisce && (
+        <p className="avviso">
+          Il mese era stato riaperto: questo invio <b>sostituisce</b> la versione {invio.sostituisce.versione}, e l&apos;email lo dirà
+          chiaramente.
+        </p>
+      )}
+      <table className="totali riepilogo-invio">
+        <tbody>
+          <tr>
+            <th scope="row">Ore</th>
+            <td>{numero(totali.ore)}</td>
+          </tr>
+          {totali.sedute > 0 && (
+            <tr>
+              <th scope="row">Sedute (righe PT)</th>
+              <td>{numero(totali.sedute)}</td>
+            </tr>
+          )}
+          {totali.sedute_pt > 0 && (
+            <tr>
+              <th scope="row">Sedute PT con cliente</th>
+              <td>{totali.sedute_pt}</td>
+            </tr>
+          )}
+          <tr>
+            <th scope="row">File</th>
+            <td className="a-capo">{invio.nome_file}</td>
+          </tr>
+          <tr>
+            <th scope="row">A</th>
+            <td className="a-capo">{invio.destinatario ?? <span className="errore">manca: avvisa l&apos;amministratore</span>}</td>
+          </tr>
+          <tr>
+            <th scope="row">In copia</th>
+            <td className="a-capo">
+              {invio.copia.map((e) => (
+                <span key={e} className="indirizzo">
+                  {e}
+                </span>
+              ))}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="dettaglio">
+        In copia vanno i responsabili dei settori delle attività su cui hai registrato ore in {nomeMese}, più te. Dopo l&apos;invio il
+        mese diventa di sola lettura.
+      </p>
+    </Foglio>
   );
 }

@@ -73,6 +73,15 @@ export const api = {
   anteprimaPrecompilazione: (anno, mese) => chiama(`/mese/${anno}/${mese}/precompilazione`),
   precompila: (anno, mese) => chiama(`/mese/${anno}/${mese}/precompilazione`, json('POST')),
   excelMese: (anno, mese) => scaricaFile(`/mese/${anno}/${mese}/excel`),
+  riepilogoInvio: (anno, mese) => chiama(`/mese/${anno}/${mese}/invio`),
+  inviaMese: (anno, mese) => chiama(`/mese/${anno}/${mese}/invio`, json('POST')),
+  fileInviato: (anno, mese, versione) => scaricaFile(`/mese/${anno}/${mese}/invii/${versione}/file`),
+
+  // Bacheca
+  avvisi: () => chiama('/avvisi'),
+  avvisiNonLetti: () => chiama('/avvisi/non-letti'),
+  avviso: (id) => chiama(`/avvisi/${id}`),
+  segnaLetto: (id) => chiama(`/avvisi/${id}/letto`, json('POST')),
 
   orarioTipo: () => chiama('/orario-tipo'),
   salvaOrarioTipo: (voci) => chiama('/orario-tipo', json('PUT', { voci })),
@@ -89,6 +98,10 @@ export const api = {
   collaboratori: (anno, mese) => chiama(`/collaboratori/${anno}/${mese}`),
   meseDi: (id, anno, mese) => chiama(`/collaboratori/${id}/mese/${anno}/${mese}`),
   excelDi: (id, anno, mese) => scaricaFile(`/collaboratori/${id}/mese/${anno}/${mese}/excel`),
+  fileInviatoDi: (id, anno, mese, versione) => scaricaFile(`/collaboratori/${id}/mese/${anno}/${mese}/invii/${versione}/file`),
+  riapriMese: (id, anno, mese, motivazione) =>
+    chiama(`/collaboratori/${id}/mese/${anno}/${mese}/riapertura`, json('POST', { motivazione })),
+  sollecita: (id, anno, mese) => chiama(`/collaboratori/${id}/mese/${anno}/${mese}/sollecito`, json('POST')),
 
   // Amministratore
   settori: () => chiama('/settori'),
@@ -104,6 +117,13 @@ export const api = {
   organizzazione: () => chiama('/organizzazione'),
   modificaOrganizzazione: (dati) => chiama('/organizzazione', json('PATCH', dati)),
   registroModifiche: (salta = 0) => chiama(`/registro-modifiche?salta=${salta}`),
+  email: (salta = 0, stato = '') => chiama(`/email?salta=${salta}${stato ? `&stato=${stato}` : ''}`),
+  riprovaEmail: (id) => chiama(`/email/${id}/riprova`, json('POST')),
+  avvisiGestione: () => chiama('/avvisi/gestione'),
+  pubblicaAvviso: (dati) => chiama('/avvisi', json('POST', dati)),
+  modificaAvviso: (id, dati) => chiama(`/avvisi/${id}`, json('PATCH', dati)),
+  ritiraAvviso: (id) => chiama(`/avvisi/${id}/ritiro`, json('POST')),
+  lettureAvviso: (id) => chiama(`/avvisi/${id}/letture`),
   modelli: () => chiama('/modello'),
   fileModello: () => scaricaFile('/modello/file'),
   // Il file va come corpo della richiesta, non in JSON.
