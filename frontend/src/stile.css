@@ -1475,3 +1475,51 @@ button.svuota-giorno {
 .riassunto .etichetta {
   white-space: nowrap;
 }
+
+/* ------------------------------------------------------------ Fase 6 */
+
+/* Informativa sulla privacy: testo lungo, non un modulo. */
+.pagina-informativa {
+  padding: 16px;
+}
+
+.informativa {
+  display: block;
+  max-width: 720px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+.informativa h2 {
+  font-size: 1.1rem;
+  margin: 24px 0 8px;
+}
+
+.informativa ul {
+  padding-left: 20px;
+}
+
+.informativa li + li {
+  margin-top: 6px;
+}
+
+.informativa .avviso {
+  margin-bottom: 16px;
+}
+
+/* Parte della bozza ancora da completare: deve saltare all'occhio. */
+.da-completare {
+  background: #ffe066;
+  color: #5c3c00;
+  font-weight: 600;
+  padding: 0 3px;
+  border-radius: 3px;
+}
+
+.link-privacy {
+  display: block;
+  margin: 16px auto;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--colore-secondario);
+}

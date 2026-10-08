@@ -117,7 +117,12 @@ export default function Home({ sessione, onEsci }) {
           Esci
         </button>
       </header>
-      <main>{contenuto}</main>
+      <main>
+        {contenuto}
+        <a className="link-privacy" href="#/privacy">
+          Informativa sulla privacy
+        </a>
+      </main>
       <nav className={`schede${elenco.length > 5 ? ' molte' : ''}`} aria-label="Sezioni">
         {elenco.map((s) => (
           <a key={s.hash} href={s.hash} aria-current={sezione === s.chiave ? 'page' : undefined}>

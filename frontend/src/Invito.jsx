@@ -88,6 +88,10 @@ export default function Invito({ codice, onAccesso }) {
           {invio ? 'Salvataggio…' : 'Salva e accedi'}
         </button>
         <p className="dettaglio">Per accedere userai l&apos;email {info.email}.</p>
+        {/* In una nuova scheda: qui il link di invito resta aperto. */}
+        <a className="link-privacy" href="#/privacy" target="_blank" rel="noopener">
+          Informativa sulla privacy
+        </a>
       </form>
     </main>
   );
