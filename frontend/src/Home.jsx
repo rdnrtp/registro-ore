@@ -9,6 +9,7 @@ import Collaboratori from './Collaboratori.jsx';
 import MeseCollaboratore from './MeseCollaboratore.jsx';
 import Gestione from './Gestione.jsx';
 import Bacheca from './Bacheca.jsx';
+import Foglio from './Foglio.jsx';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -43,6 +44,8 @@ export default function Home({ sessione, onEsci }) {
   const [mie, setMie] = useState(null);
   const [errore, setErrore] = useState('');
   const [nonLetti, setNonLetti] = useState(0);
+  // Pannello "Esci": null = chiuso, altrimenti { attesa, errore }.
+  const [uscita, setUscita] = useState(null);
 
   const caricaAttivita = useCallback(() => api.attivita().then(setAttivita), []);
   const contaNonLetti = useCallback(
@@ -103,6 +106,15 @@ export default function Home({ sessione, onEsci }) {
     contenuto = <Mese attivita={attivita} mie={mie} />;
   }
 
+  async function esci(ovunque) {
+    setUscita({ attesa: true, errore: '' });
+    try {
+      await onEsci(ovunque);
+    } catch (err) {
+      setUscita({ attesa: false, errore: `Uscita non riuscita: ${err.message}. Riprova.` });
+    }
+  }
+
   return (
     <div className="pagina con-schede">
       <header className="barra">
@@ -113,7 +125,7 @@ export default function Home({ sessione, onEsci }) {
             {utente.ruolo !== 'collaboratore' && ` · ${utente.ruolo}`}
           </small>
         </span>
-        <button type="button" className="secondario" onClick={() => confermaUscita() && onEsci()}>
+        <button type="button" className="secondario" onClick={() => confermaUscita() && setUscita({ attesa: false, errore: '' })}>
           Esci
         </button>
       </header>
@@ -135,6 +147,38 @@ export default function Home({ sessione, onEsci }) {
           </a>
         ))}
       </nav>
+      {uscita && (
+        <Foglio
+          titolo="Esci"
+          onChiudi={() => setUscita(null)}
+          piede={
+            <>
+              <button type="button" onClick={() => esci(false)} disabled={uscita.attesa}>
+                Esci da questo dispositivo
+              </button>
+              <button type="button" className="pericolo" onClick={() => esci(true)} disabled={uscita.attesa}>
+                Esci da tutti i dispositivi
+              </button>
+              <button type="button" className="neutro" onClick={() => setUscita(null)} disabled={uscita.attesa}>
+                Annulla
+              </button>
+            </>
+          }
+        >
+          <p>
+            Su un computer usato da più persone, per esempio quello della reception, esci sempre prima di andare via.
+          </p>
+          <p className="dettaglio">
+            &laquo;Esci da tutti i dispositivi&raquo; chiude anche gli accessi rimasti aperti altrove (un altro computer,
+            un telefono perso): per rientrare servirà di nuovo la password.
+          </p>
+          {uscita.errore && (
+            <p className="errore" role="alert">
+              {uscita.errore}
+            </p>
+          )}
+        </Foglio>
+      )}
     </div>
   );
 }

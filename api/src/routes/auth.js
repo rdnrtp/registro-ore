@@ -1,6 +1,6 @@
 const express = require('express');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
-const { firmaToken, impostaCookie, cancellaCookie, autenticato } = require('../auth');
+const { COOKIE, apriSessione, chiudiSessione, impostaCookie, cancellaCookie, autenticato } = require('../auth');
 const { verificaPassword, hashPassword } = require('../password');
 const { normalizzaEmail } = require('../validazione');
 
@@ -46,13 +46,28 @@ function rotteAuth({ pool, config }) {
     if (!utente || !valida || !utente.active) {
       return res.status(401).json({ errore: 'Email o password non corretti' });
     }
-    impostaCookie(res, config, firmaToken(config, utente));
+    impostaCookie(res, config, await apriSessione(pool, config, utente));
     res.json({ ok: true });
   });
 
-  router.post('/logout', (req, res) => {
+  // Esci: chiude sul server la sessione di questo dispositivo, così il token
+  // non vale più nemmeno se ne è rimasta una copia (es. PC condiviso).
+  router.post('/logout', async (req, res) => {
+    const token = req.cookies?.[COOKIE];
+    if (token) await chiudiSessione(pool, config, token);
     cancellaCookie(res, config);
     res.json({ ok: true });
+  });
+
+  // Esci da tutti i dispositivi, compreso questo. Restituisce quante
+  // sessioni sono state chiuse.
+  router.post('/esci-ovunque', autenticato(pool, config), async (req, res) => {
+    const { rowCount } = await pool.query('DELETE FROM user_sessions WHERE user_id = $1 AND organization_id = $2', [
+      req.utente.id,
+      req.utente.organizzazioneId,
+    ]);
+    cancellaCookie(res, config);
+    res.json({ ok: true, sessioni_chiuse: rowCount });
   });
 
   router.get('/me', autenticato(pool, config), async (req, res) => {

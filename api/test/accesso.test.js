@@ -66,34 +66,38 @@ describe('accesso senza token valido', () => {
   });
 
   it('il token nell\'header Authorization non viene accettato', async () => {
-    const token = jwt.sign({ org: A.id, ver: 0 }, configTest.jwtSecret, { subject: A.admin.id });
+    const token = jwt.sign({ org: A.id, ver: 0, sid: await sessione(A.admin.id) }, configTest.jwtSecret, { subject: A.admin.id });
     const res = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`);
     assert.equal(res.status, 401);
   });
 
+  // Sessione registrata nel database, per firmare token altrimenti validi.
+  const sessione = async (utenteId, org = A.id) =>
+    (await pool.query("INSERT INTO user_sessions (organization_id, user_id, expires_at) VALUES ($1, $2, now() + interval '1 hour') RETURNING id", [org, utenteId])).rows[0].id;
+
   const conCookie = (token) => (rotta) => request(app).get(rotta).set('Cookie', `registro_ore_sessione=${token}`);
 
   it('un token firmato con un altro segreto risponde 401', async () => {
-    const falso = jwt.sign({ org: A.id, ver: 0 }, 'un-altro-segreto-lungo-trentadue-caratteri!', {
+    const falso = jwt.sign({ org: A.id, ver: 0, sid: await sessione(A.admin.id) }, 'un-altro-segreto-lungo-trentadue-caratteri!', {
       subject: A.admin.id,
     });
     for (const rotta of rotteProtette()) assert.equal((await conCookie(falso)(rotta)).status, 401, rotta);
   });
 
   it('un token scaduto risponde 401', async () => {
-    const scaduto = jwt.sign({ org: A.id, ver: 0, exp: Math.floor(Date.now() / 1000) - 60 }, configTest.jwtSecret, {
+    const scaduto = jwt.sign({ org: A.id, ver: 0, sid: await sessione(A.admin.id), exp: Math.floor(Date.now() / 1000) - 60 }, configTest.jwtSecret, {
       subject: A.admin.id,
     });
     assert.equal((await conCookie(scaduto)('/api/auth/me')).status, 401);
   });
 
   it('un token senza firma (alg none) risponde 401', async () => {
-    const nonFirmato = jwt.sign({ org: A.id, ver: 0 }, null, { subject: A.admin.id, algorithm: 'none' });
+    const nonFirmato = jwt.sign({ org: A.id, ver: 0, sid: await sessione(A.admin.id) }, null, { subject: A.admin.id, algorithm: 'none' });
     assert.equal((await conCookie(nonFirmato)('/api/auth/me')).status, 401);
   });
 
   it('un token valido ma con una versione di sessione superata risponde 401', async () => {
-    const buono = jwt.sign({ org: A.id, ver: 0 }, configTest.jwtSecret, { subject: A.collaboratore.id });
+    const buono = jwt.sign({ org: A.id, ver: 0, sid: await sessione(A.collaboratore.id) }, configTest.jwtSecret, { subject: A.collaboratore.id });
     assert.equal((await conCookie(buono)('/api/attivita')).status, 200);
     await pool.query('UPDATE users SET token_version = token_version + 1 WHERE id = $1', [A.collaboratore.id]);
     try {
@@ -104,8 +108,8 @@ describe('accesso senza token valido', () => {
   });
 
   it("un token con l'organizzazione sbagliata risponde 401", async () => {
-    const token = jwt.sign({ org: A.id, ver: 0 }, configTest.jwtSecret, { subject: A.collaboratore.id });
-    const altro = jwt.sign({ org: '00000000-0000-0000-0000-000000000000', ver: 0 }, configTest.jwtSecret, {
+    const token = jwt.sign({ org: A.id, ver: 0, sid: await sessione(A.collaboratore.id) }, configTest.jwtSecret, { subject: A.collaboratore.id });
+    const altro = jwt.sign({ org: '00000000-0000-0000-0000-000000000000', ver: 0, sid: await sessione(A.collaboratore.id) }, configTest.jwtSecret, {
       subject: A.collaboratore.id,
     });
     assert.equal((await conCookie(token)('/api/attivita')).status, 200);

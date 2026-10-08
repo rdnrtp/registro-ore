@@ -30,8 +30,11 @@ export default function App() {
     return () => window.removeEventListener('hashchange', cambia);
   }, []);
 
-  async function esci() {
-    await api.logout().catch(() => {});
+  // Il cookie è httpOnly: solo il server può chiudere la sessione. Se la
+  // richiesta non riesce l'errore risale, invece di fingere l'uscita (su un
+  // PC condiviso il prossimo utente si troverebbe dentro).
+  async function esci(ovunque = false) {
+    await (ovunque ? api.esciOvunque() : api.logout());
     setSessione(null);
   }
 

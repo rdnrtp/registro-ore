@@ -28,6 +28,9 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   ogni richiesta. Nessuna registrazione pubblica: l'amministratore crea
   l'utente e gli manda un link di invito personale (monouso, con scadenza) con
   cui sceglie la password. Lo stesso link serve per la password dimenticata.
+- Sessioni registrate sul server (`user_sessions`, durata 7 giorni): "Esci"
+  invalida davvero il token di quel dispositivo (PC condivisi, es. reception);
+  "Esci da tutti i dispositivi" chiude ogni sessione dell'utente.
 - Ruoli, che si sommano (tutti registrano le proprie ore): collaboratore (solo
   le proprie), responsabile di settore (in più vede in sola lettura le righe
   dei suoi settori nei mesi degli altri), amministratore (in più vede tutto in
@@ -133,7 +136,9 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   sceglie tra `Privacy` (`#/privacy`, informativa in bozza, con o senza
   accesso, collegata da accesso, invito, app ed email di invito), `Invito`
   (`#/invito/<codice>`, anche con un accesso già fatto), `Login` e `Home`; `Home.jsx` = barra delle sezioni in basso (secondo il
-  ruolo) e pagine scelte con l'ancora dell'indirizzo, letta da
+  ruolo), "Esci" in alto (pannello: questo dispositivo / tutti i dispositivi;
+  se la richiesta fallisce mostra l'errore invece di fingere l'uscita, perché
+  il cookie httpOnly lo cancella solo il server) e pagine scelte con l'ancora dell'indirizzo, letta da
   `navigazione.js` (`usaRotta`; `usaGuardiaModifiche` chiede conferma prima
   di lasciare una pagina con modifiche non salvate, usata da `OrarioTipo`):
   `#/` = `Mese.jsx`, `#/attivita` = `MieAttivita.jsx`, `#/orario` =
@@ -299,6 +304,12 @@ Migrazione `009_correzioni.sql`:
   null quando la quantità viene cambiata a mano (un salvataggio con lo stesso
   valore non conta). Le righe inserite a mano non ce l'hanno.
 
+Migrazione `010_sessioni.sql`:
+
+- `user_sessions` (utente, `created_at`, `expires_at`): una riga per accesso;
+  il token vale solo finché la riga esiste. I token emessi prima della 010
+  (senza `sid`) non valgono più: chi era collegato rifà l'accesso una volta.
+
 Chiavi primarie UUID. Ogni tabella con dati di un impianto ha `organization_id`;
 le chiavi esterne tra tabelle dell'organizzazione sono composte
 `(id, organization_id)`, così il database rifiuta collegamenti tra
@@ -309,10 +320,17 @@ mai modificare uno già applicato.
 
 - `req.utente` = `{ id, organizzazioneId, ruolo }`: id e organizzazione dal JWT
   (cookie httpOnly `registro_ore_sessione`, SameSite=Lax; contiene `sub`,
-  `org`, `ver`), ruolo dal database. `autenticato` (in `app.js`, per tutto
+  `org`, `ver`, `sid`), ruolo dal database. `autenticato` (in `app.js`, per tutto
   `/api` tranne `/api/auth` e `/api/inviti`) legge a ogni richiesta la riga
-  dell'utente: disattivato, organizzazione diversa o `token_version` diversa
-  = 401 subito. Mai leggere utente, ruolo od organizzazione da corpo, query o
+  dell'utente e quella della sessione: disattivato, organizzazione diversa,
+  `token_version` diversa, sessione cancellata o scaduta = 401 subito.
+- Sessioni (`src/auth.js`): un token si emette solo con `apriSessione` (login,
+  link di invito), che crea la riga in `user_sessions` e pulisce le scadute
+  dell'utente. `POST /api/auth/logout` (pubblica) cancella la sessione del
+  cookie (`chiudiSessione`; token non valido = nessun effetto, sempre 200).
+  `POST /api/auth/esci-ovunque` (autenticata) cancella tutte quelle
+  dell'utente → `{ ok, sessioni_chiuse }`. Anche nuova password dal link e
+  disattivazione cancellano le sessioni dell'utente (oltre a `token_version`). Mai leggere utente, ruolo od organizzazione da corpo, query o
   parametri.
 - In produzione (`config.produzione`): cookie sempre `Secure`; le richieste
   che modificano (non GET/HEAD/OPTIONS) con un'intestazione `Origin` diversa da
@@ -539,7 +557,8 @@ Coda e promemoria (`src/posta/coda.js`, `src/promemoria.js`):
   a destra) non entrano in nessun totale. Da chiarire con BV.
 - Sedute PT nelle tabelle in ordine di data (a parità, di inserimento), data
   come data Excel con formato `dd/mm/yyyy`.
-- Test: `test/produzione.test.js` (controlli della configurazione, `/api/stato`,
+- Test: `test/sessioni.test.js` (esci, esci da tutti i dispositivi, token
+  copiati, sessioni scadute o di altri), `test/produzione.test.js` (controlli della configurazione, `/api/stato`,
   origine delle richieste), `test/correzioni.test.js` (annulla precompilazione, svuota giorni),
   `test/invio.test.js` (invio del mese, sul modello reale di BV),
   `test/posta.test.js`, `test/promemoria.test.js`, `test/bacheca.test.js`.
@@ -578,7 +597,6 @@ Punti aperti dopo la preparazione della Fase 6:
   riaperture). I backup conservano i dati cancellati per altri 6 mesi.
 - Log dei container ruotati per dimensione (5×10 MB), non per tempo: nginx
   registra gli IP degli accessi.
-- Il logout non invalida il token (resta valido fino alla scadenza, 7 giorni).
 
 ## Modello Excel di BV (verificato in Fase 0)
 

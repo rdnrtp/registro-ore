@@ -62,6 +62,7 @@ const json = (metodo, corpo) => ({ method: metodo, body: corpo === undefined ? u
 export const api = {
   login: (email, password) => chiama('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   logout: () => chiama('/auth/logout', { method: 'POST' }),
+  esciOvunque: () => chiama('/auth/esci-ovunque', { method: 'POST' }),
   io: () => chiama('/auth/me'),
 
   attivita: () => chiama('/attivita'),

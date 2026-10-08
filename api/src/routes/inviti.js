@@ -1,6 +1,6 @@
 const express = require('express');
 const { rateLimit } = require('express-rate-limit');
-const { firmaToken, impostaCookie } = require('../auth');
+const { apriSessione, impostaCookie } = require('../auth');
 const { transazione } = require('../db');
 const { ErroreHttp } = require('../errori');
 const { hashCodice, CODICE } = require('../inviti');
@@ -74,7 +74,7 @@ function rotteInviti({ pool, config }) {
     // Prima un controllo senza blocchi, per non calcolare l'hash (lento) per un link non valido.
     await leggiInvito(pool, req.params.codice);
     const hash = await hashPassword(password);
-    const utente = await transazione(pool, async (client) => {
+    const token = await transazione(pool, async (client) => {
       const i = await leggiInvito(client, req.params.codice, true);
       await client.query('UPDATE user_invites SET used_at = now() WHERE id = $1', [i.id]);
       const { rows } = await client.query(
@@ -90,9 +90,11 @@ function rotteInviti({ pool, config }) {
         tipo: 'utente',
         id: i.user_id,
       });
-      return rows[0];
+      // Nuova password: le sessioni aperte con quella vecchia si chiudono.
+      await client.query('DELETE FROM user_sessions WHERE user_id = $1', [i.user_id]);
+      return apriSessione(client, config, rows[0]);
     });
-    impostaCookie(res, config, firmaToken(config, utente));
+    impostaCookie(res, config, token);
     res.json({ ok: true });
   });
 

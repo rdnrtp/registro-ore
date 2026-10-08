@@ -13,14 +13,40 @@ function opzioniCookie(config) {
   };
 }
 
-// Il token contiene solo identità, organizzazione e versione della sessione:
-// il ruolo e lo stato attivo si leggono dal database a ogni richiesta.
-function firmaToken(config, utente) {
+// Il token contiene solo identità, organizzazione, versione delle sessioni
+// dell'utente e id della sessione (riga di user_sessions): il ruolo e lo
+// stato attivo si leggono dal database a ogni richiesta.
+function firmaToken(config, utente, sessioneId) {
   return jwt.sign(
-    { org: utente.organization_id, ver: utente.token_version },
+    { org: utente.organization_id, ver: utente.token_version, sid: sessioneId },
     config.jwtSecret,
     { subject: utente.id, expiresIn: `${config.jwtDurataOre}h`, algorithm: 'HS256' },
   );
+}
+
+// Registra una nuova sessione (login o link di invito) e restituisce il suo
+// token. Toglie anche le sessioni scadute dell'utente.
+async function apriSessione(db, config, utente) {
+  await db.query('DELETE FROM user_sessions WHERE user_id = $1 AND expires_at <= now()', [utente.id]);
+  const { rows } = await db.query(
+    `INSERT INTO user_sessions (organization_id, user_id, expires_at)
+     VALUES ($1, $2, now() + make_interval(hours => $3)) RETURNING id`,
+    [utente.organization_id, utente.id, config.jwtDurataOre],
+  );
+  return firmaToken(config, utente, rows[0].id);
+}
+
+// Chiude la sessione del token indicato (uscita da questo dispositivo).
+// Un token non valido o già chiuso non fa nulla.
+async function chiudiSessione(db, config, token) {
+  let dati;
+  try {
+    dati = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'], ignoreExpiration: true });
+  } catch {
+    return;
+  }
+  if (!isUuid(dati.sid) || !isUuid(dati.sub)) return;
+  await db.query('DELETE FROM user_sessions WHERE id = $1 AND user_id = $2', [dati.sid, dati.sub]);
 }
 
 function impostaCookie(res, config, token) {
@@ -37,6 +63,8 @@ function cancellaCookie(res, config) {
 // Ruolo e stato attivo vengono dal database a ogni richiesta: un utente
 // disattivato o con la password reimpostata è respinto subito, e un cambio di
 // ruolo vale dalla richiesta successiva, senza aspettare la scadenza del token.
+// La sessione deve esistere ancora in user_sessions: dopo "Esci" il token non
+// vale più, anche se qualcuno ne ha conservato una copia.
 function autenticato(pool, config) {
   return async (req, res, next) => {
     const token = req.cookies?.[COOKIE];
@@ -48,13 +76,16 @@ function autenticato(pool, config) {
       cancellaCookie(res, config);
       return res.status(401).json({ errore: 'Sessione non valida o scaduta' });
     }
-    if (!isUuid(dati.sub) || !isUuid(dati.org) || !Number.isInteger(dati.ver)) {
+    if (!isUuid(dati.sub) || !isUuid(dati.org) || !isUuid(dati.sid) || !Number.isInteger(dati.ver)) {
       cancellaCookie(res, config);
       return res.status(401).json({ errore: 'Sessione non valida o scaduta' });
     }
     const { rows } = await pool.query(
-      'SELECT role FROM users WHERE id = $1 AND organization_id = $2 AND active AND token_version = $3',
-      [dati.sub, dati.org, dati.ver],
+      `SELECT u.role FROM users u
+         JOIN user_sessions s ON s.user_id = u.id AND s.organization_id = u.organization_id
+        WHERE u.id = $1 AND u.organization_id = $2 AND u.active AND u.token_version = $3
+          AND s.id = $4 AND s.expires_at > now()`,
+      [dati.sub, dati.org, dati.ver, dati.sid],
     );
     if (!rows[0] || !RUOLI.includes(rows[0].role)) {
       cancellaCookie(res, config);
@@ -73,4 +104,14 @@ function richiediRuolo(...ammessi) {
   };
 }
 
-module.exports = { COOKIE, RUOLI, firmaToken, impostaCookie, cancellaCookie, autenticato, richiediRuolo };
+module.exports = {
+  COOKIE,
+  RUOLI,
+  firmaToken,
+  apriSessione,
+  chiudiSessione,
+  impostaCookie,
+  cancellaCookie,
+  autenticato,
+  richiediRuolo,
+};

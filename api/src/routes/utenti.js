@@ -190,8 +190,10 @@ function rotteUtenti({ pool, config }) {
         [id, org, dopo.nome, dopo.cognome, dopo.email, dopo.ruolo, dopo.attivo, dopo.esonerato_invio],
       );
       if (!dopo.attivo) {
-        // Un utente disattivato non deve poter usare un link già creato.
+        // Un utente disattivato non deve poter usare un link già creato, e
+        // le sue sessioni si chiudono.
         await client.query('DELETE FROM user_invites WHERE user_id = $1 AND organization_id = $2 AND used_at IS NULL', [id, org]);
+        await client.query('DELETE FROM user_sessions WHERE user_id = $1 AND organization_id = $2', [id, org]);
       }
       await impostaSettori(client, org, id, settori);
 
