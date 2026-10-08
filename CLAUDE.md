@@ -50,11 +50,22 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
 - Fase 5: l'app invia le email via SMTP (nodemailer), sempre attraverso una coda
   nel database (`email_outbox`) elaborata dall'API in sottofondo, mai dentro la
   richiesta dell'utente. In sviluppo la posta va alla casella finta Mailpit del
-  Compose; il servizio vero si sceglie nella Fase 6.
+  Compose; in produzione a un servizio SMTP generico (porta 587 con STARTTLS
+  obbligatorio, o 465), ancora da scegliere.
 - Notifiche agli utenti (promemoria, solleciti, avvisi, riaperture) solo
   attraverso `notifica()` (`src/notifiche.js`), che le salva e le consegna con
-  ogni canale di `CANALI`: oggi l'email; nella Fase 6 il push sarà un secondo
-  canale, senza toccare chi notifica.
+  ogni canale di `CANALI`: oggi l'email; dopo la messa online il push sarà un
+  secondo canale, senza toccare chi notifica.
+- Fase 6 (produzione): un solo VPS Ubuntu LTS nell'UE con `compose.prod.yml`
+  (distinto da quello di sviluppo) e Caddy davanti per l'HTTPS automatico.
+  Database di produzione che parte vuoto: nessun dato di sviluppo trasferito.
+  Tutto ciò che si fa sul server è uno script in `deploy/`, documentato passo
+  per passo in `RUNBOOK.md` (scritto per chi non è sistemista).
+- Backup: `pg_dump` cifrato con age a chiave pubblica; la chiave privata non sta
+  sul server (gestore di password + carta). Copia fuori dal server con rclone
+  (S3 o SFTP, fornitore da scegliere), configurata solo da variabili
+  `RCLONE_CONFIG_REMOTO_*`. Email ad `ALLARMI_EMAIL` se fallisce.
+- Accesso del server al repository privato con una deploy key in sola lettura.
 - Un mese inviato conserva il file esattamente come è partito
   (`month_submission_versions`); dopo una riapertura il reinvio è una nuova
   versione e l'email dice che sostituisce la precedente.
@@ -66,8 +77,35 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   `mailpit` (casella di posta finta, pagina web su http://localhost:8025, solo
   da questo PC), `api-test` (profilo `test`, avviato solo con `docker compose run`).
   Configurazione in `.env` (non tracciato), modello in `.env.example`.
+- `compose.prod.yml` (produzione, progetto `registro-ore-prod`): `db` senza
+  porte, `api` (`AMBIENTE=produzione`, `TRUST_PROXY=2`, `cap_drop: ALL`),
+  `web`, `caddy` (porte 80/443, `deploy/Caddyfile`: HTTPS Let's Encrypt per
+  `DOMINIO`, HSTS, Permissions-Policy, COOP/CORP, noindex, niente
+  Server/Via; le altre intestazioni le mette `frontend/nginx.conf`). Controlli
+  di salute in catena (db → api → web → caddy), `restart: unless-stopped`,
+  log `local` 5×10 MB, `no-new-privileges`. Variabili in `.env.production`
+  (non tracciato; modello commentato in `.env.production.example`, dove i
+  valori da cambiare contengono `SOSTITUISCI`). Si usa sempre con
+  `deploy/compose.sh` (passa file ed env; `ENV_FILE=` per un altro file).
+- `deploy/`: script bash per il server (controllati con ShellCheck), con
+  `comune.sh` (`dc`, `leggi_var`, `attendi_app`, `avviso_email`):
+  `prepara-server.sh` (root, Ubuntu nuovo: utente, SSH solo chiave, ufw
+  22/80/443, fail2ban, unattended-upgrades con riavvio 04:30, Docker,
+  Europe/Rome, swap), `genera-segreti.sh`, `crea-chiave-backup.sh`,
+  `installa-servizi.sh` (timer systemd `registro-ore-backup` alle 02:30),
+  `backup.sh [giornaliero|rilascio|manuale]` (cartelle `giornalieri`,
+  `settimanali`, `mensili` = 7/4/6, `rilasci` = 5, `manuali` = 10, in
+  `BACKUP_DIR`; settimanali e mensili sono hard link; `rclone sync` con
+  `--max-delete 10`), `ripristina.sh` (prova in `<db>_prova` con confronto
+  dei conteggi, oppure `--sostituisci`), `scarica-backup.sh`, `rilascia.sh`
+  (backup, `git checkout --detach` di `origin/HEAD` o del commit indicato,
+  build, migra, up, controllo HTTPS; annotato in `.rilasci.log`),
+  `torna-indietro.sh [--con-database]`.
 - `api/`: `src/app.js` (Express; rotte pubbliche, poi `autenticato` per tutto
-  il resto di `/api`), `src/auth.js` (JWT, middleware `autenticato` e
+  il resto di `/api`), `src/config.js` (variabili d'ambiente; con
+  `AMBIENTE=produzione` `controllaProduzione` rifiuta l'avvio se una
+  variabile necessaria manca o contiene un valore di esempio), `src/stato.js`
+  (`/api/stato`), `src/auth.js` (JWT, middleware `autenticato` e
   `richiediRuolo`), `src/routes/` (`auth`; `inviti` = link di invito,
   pubblici; `organizzazione` = elenco attività e settori; `registro` = ore,
   orario tipo, mie attività, sedute PT; `esportazione` = proprio file Excel e
@@ -88,11 +126,13 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   `src/tempo.js` (ora italiana),
   `src/traccia.js` (`audit_log`), `src/errori.js` (`ErroreHttp`),
   `src/validazione.js` (uuid, date, mesi, testi, email), `src/db.js`
-  (`transazione`), `src/cli/` (comandi da terminale),
+  (`transazione`), `src/cli/` (comandi da terminale; `avviso-sistema` = email
+  diretta via SMTP ad `ALLARMI_EMAIL`, senza coda, usata da `deploy/backup.sh`),
   `migrations/NNN_nome.sql`, `test/` (node:test + supertest).
 - `frontend/`: Vite + React, nessuna libreria oltre a React. `src/App.jsx`
-  sceglie tra `Invito` (`#/invito/<codice>`, anche con un accesso già fatto),
-  `Login` e `Home`; `Home.jsx` = barra delle sezioni in basso (secondo il
+  sceglie tra `Privacy` (`#/privacy`, informativa in bozza, con o senza
+  accesso, collegata da accesso, invito, app ed email di invito), `Invito`
+  (`#/invito/<codice>`, anche con un accesso già fatto), `Login` e `Home`; `Home.jsx` = barra delle sezioni in basso (secondo il
   ruolo) e pagine scelte con l'ancora dell'indirizzo, letta da
   `navigazione.js` (`usaRotta`; `usaGuardiaModifiche` chiede conferma prima
   di lasciare una pagina con modifiche non salvate, usata da `OrarioTipo`):
@@ -157,6 +197,13 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   I test dell'esportazione richiedono `modello/modello_bv.xlsx` sul PC.
 - Sviluppo frontend senza Docker: `cd frontend && npm run dev` (inoltra `/api` a
   `API_URL`, predefinito http://localhost:3000).
+- Produzione: tutto in `RUNBOOK.md`. Sul server si lavora in `/opt/registro-ore`
+  con `./deploy/compose.sh …` (non `docker compose` da solo).
+- Prova dello stack di produzione su questo PC: `.env.prova-locale` (non
+  tracciato) con `DOMINIO=localhost` (Caddy usa un certificato locale), da Git
+  Bash: `ENV_FILE=.env.prova-locale ./deploy/compose.sh up -d --build --wait`.
+  Occupa le porte 80 e 443; spegnere con `… compose.sh down -v`. Gli script di
+  `deploy/` sono per Linux: sul PC si provano in un container (age, docker CLI).
 
 ## Schema del database (`api/migrations/001_schema_iniziale.sql`)
 
@@ -267,6 +314,12 @@ mai modificare uno già applicato.
   dell'utente: disattivato, organizzazione diversa o `token_version` diversa
   = 401 subito. Mai leggere utente, ruolo od organizzazione da corpo, query o
   parametri.
+- In produzione (`config.produzione`): cookie sempre `Secure`; le richieste
+  che modificano (non GET/HEAD/OPTIONS) con un'intestazione `Origin` diversa da
+  `APP_URL` = 403 (`stessaOrigine` in `app.js`).
+- `GET /api/salute` (controllo di Docker: database) e `GET /api/stato`
+  (monitoraggio esterno: database, email in attesa da oltre 30 minuti, lavori
+  in sottofondo fermi da oltre 5 minuti; 200 o 503, mai dati) sono pubbliche.
 - Ogni query filtra per `req.utente.organizzazioneId`. Un id di un'altra
   organizzazione (o non valido) risponde 404, come se non esistesse.
 - Ogni nuova rotta che legge dati per id va coperta in `test/isolamento.test.js`.
@@ -486,7 +539,8 @@ Coda e promemoria (`src/posta/coda.js`, `src/promemoria.js`):
   a destra) non entrano in nessun totale. Da chiarire con BV.
 - Sedute PT nelle tabelle in ordine di data (a parità, di inserimento), data
   come data Excel con formato `dd/mm/yyyy`.
-- Test: `test/correzioni.test.js` (annulla precompilazione, svuota giorni),
+- Test: `test/produzione.test.js` (controlli della configurazione, `/api/stato`,
+  origine delle richieste), `test/correzioni.test.js` (annulla precompilazione, svuota giorni),
   `test/invio.test.js` (invio del mese, sul modello reale di BV),
   `test/posta.test.js`, `test/promemoria.test.js`, `test/bacheca.test.js`.
   Le email nei test passano da `trasportoFinto()` (`test/helpers.js`).
@@ -502,10 +556,29 @@ Coda e promemoria (`src/posta/coda.js`, `src/promemoria.js`):
 3. Esportazione Excel — **completata**
 4. Multiutente e ruoli — **completata**
 5. Chiusura mese, invio email, promemoria, bacheca — **completata**
-6. Stabilità e deploy sul VPS
+6. Stabilità e deploy sul VPS — **preparata e provata su questo PC** (stack di
+   produzione con certificato locale, backup/ripristino, S3 e SFTP finti,
+   rilascio e ritorno indietro); messa online in attesa di VPS, dominio,
+   servizio SMTP e spazio per i backup. Notifiche push: dopo la messa online.
 7. Riepilogo per la direzione
 
 Lavora una fase alla volta e fermati alla fine di ciascuna per il resoconto.
+
+Punti aperti dopo la preparazione della Fase 6:
+
+- Informativa sulla privacy (`frontend/src/Privacy.jsx`): bozza con le parti
+  `<Dc>` da completare; titolare BV, da far verificare al loro consulente. Il
+  testo è unico per installazione (non è configurazione di un'organizzazione).
+- Conservazione: oggi nessun dato viene cancellato automaticamente (ore,
+  sedute PT con i nomi dei clienti, file inviati, email in `email_outbox`,
+  notifiche, `audit_log`). Manca una funzione per cancellare o rendere anonimo
+  un collaboratore che lascia, dopo i tempi di conservazione decisi da BV:
+  `DELETE FROM users` cancellerebbe a cascata anche i file inviati, ed è
+  bloccato per chi compare come autore (`audit_log.actor_id`, avvisi,
+  riaperture). I backup conservano i dati cancellati per altri 6 mesi.
+- Log dei container ruotati per dimensione (5×10 MB), non per tempo: nginx
+  registra gli IP degli accessi.
+- Il logout non invalida il token (resta valido fino alla scadenza, 7 giorni).
 
 ## Modello Excel di BV (verificato in Fase 0)
 
