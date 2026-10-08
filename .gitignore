@@ -9,3 +9,10 @@ modello/
 seed/*/contatti.json
 
 .env
+
+# Configurazioni con segreti (produzione, prove locali); i modelli sì
+.env.*
+!.env.example
+!.env.production.example
+# Registro dei rilasci sul server (deploy/rilascia.sh)
+.rilasci.log

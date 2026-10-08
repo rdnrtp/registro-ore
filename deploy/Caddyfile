@@ -1,0 +1,38 @@
+# Caddy: HTTPS automatico (Let's Encrypt) per il dominio dell'app.
+# DOMINIO e ACME_EMAIL arrivano da .env.production (compose.prod.yml).
+#
+# Caddy da solo: ottiene e rinnova il certificato, reindirizza HTTP → HTTPS.
+# Con DOMINIO=localhost usa un certificato locale (prova sul PC).
+
+{
+	# Indirizzo per gli avvisi di Let's Encrypt (certificato in scadenza, …).
+	email {$ACME_EMAIL}
+}
+
+{$DOMINIO} {
+	encode zstd gzip
+
+	# Le altre intestazioni di sicurezza (CSP, X-Frame-Options, nosniff,
+	# Referrer-Policy) le aggiunge il nginx del servizio web.
+	header {
+		# Solo HTTPS per un anno. Senza includeSubDomains né preload: non
+		# vincola gli altri siti del dominio e si può tornare indietro.
+		Strict-Transport-Security "max-age=31536000"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		# App privata: nessun motore di ricerca deve indicizzarla.
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+		-Via
+		# Applica le regole alla risposta finale, dopo il proxy (che aggiunge Via).
+		defer
+	}
+
+	# Il modello Excel caricato dall'amministratore (l'API accetta fino a 5 MB).
+	request_body {
+		max_size 6MB
+	}
+
+	reverse_proxy web:80
+}

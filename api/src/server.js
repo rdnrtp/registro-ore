@@ -3,7 +3,14 @@ const { creaPool } = require('./db');
 const { creaApp } = require('./app');
 const { avviaLavori } = require('./avvio');
 
-const config = caricaConfig();
+let config;
+try {
+  config = caricaConfig();
+} catch (err) {
+  // Configurazione sbagliata: solo il messaggio, che dice cosa correggere.
+  console.error(err.message);
+  process.exit(1);
+}
 const pool = creaPool();
 const server = creaApp({ pool, config }).listen(config.port, () => {
   console.log(`API in ascolto sulla porta ${config.port}`);

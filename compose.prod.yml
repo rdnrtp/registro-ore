@@ -1,0 +1,137 @@
+# Compose di PRODUZIONE (VPS). Quello di sviluppo è docker-compose.yml.
+#
+# Differenze rispetto allo sviluppo: niente Mailpit né test, database non
+# raggiungibile da fuori, Caddy davanti a tutto con HTTPS automatico, controlli
+# di salute, riavvio automatico, log con dimensione massima.
+#
+# Si usa sempre attraverso deploy/compose.sh, che indica questo file e
+# .env.production:   ./deploy/compose.sh ps   ./deploy/compose.sh logs -f api
+#
+# Percorso delle richieste: Internet → caddy (80/443, HTTPS) → web (nginx:
+# file dell'app, /api inoltrato) → api → db.
+
+name: registro-ore-prod
+
+x-log: &log
+  # Log di ogni container: al massimo 5 file da 10 MB, poi si cancellano i più vecchi.
+  logging:
+    driver: local
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+x-sicurezza: &sicurezza
+  # Un processo nel container non può acquisire privilegi in più (setuid, …).
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    <<: [*log, *sicurezza]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?manca POSTGRES_DB in .env.production}
+      POSTGRES_USER: ${POSTGRES_USER:?manca POSTGRES_USER in .env.production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?manca POSTGRES_PASSWORD in .env.production}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Nessuna porta pubblicata: il database è raggiungibile solo dagli altri container.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  api:
+    build:
+      context: ./api
+      target: prod
+    restart: unless-stopped
+    <<: [*log, *sicurezza]
+    # Node non ha bisogno di nessun privilegio di sistema (porta 3000).
+    cap_drop: [ALL]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Attiva i controlli della configurazione all'avvio (src/config.js).
+      AMBIENTE: produzione
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?manca JWT_SECRET in .env.production}
+      JWT_DURATA_ORE: ${JWT_DURATA_ORE:-168}
+      INVITO_DURATA_ORE: ${INVITO_DURATA_ORE:-72}
+      # Davanti all'API ci sono due proxy: Caddy e il nginx del servizio web.
+      TRUST_PROXY: "2"
+      LOGIN_FINESTRA_MINUTI: ${LOGIN_FINESTRA_MINUTI:-15}
+      LOGIN_MAX_FALLITI_PER_EMAIL: ${LOGIN_MAX_FALLITI_PER_EMAIL:-5}
+      LOGIN_MAX_FALLITI_PER_IP: ${LOGIN_MAX_FALLITI_PER_IP:-30}
+      APP_URL: https://${DOMINIO:?manca DOMINIO in .env.production}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      POSTA_MITTENTE: ${POSTA_MITTENTE:-}
+      POSTA_MAX_TENTATIVI: ${POSTA_MAX_TENTATIVI:-8}
+      ALLARMI_EMAIL: ${ALLARMI_EMAIL:-}
+    volumes:
+      # Modello Excel e configurazione dell'impianto, letti solo da
+      # carica-organizzazione (copiati a mano sul server, fuori da git).
+      - ./modello:/dati/modello:ro
+      - ./seed:/dati/seed:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/salute"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    <<: [*log, *sicurezza]
+    depends_on:
+      api:
+        condition: service_healthy
+    # Nessuna porta pubblicata: ci arriva solo Caddy.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    <<: [*log, *sicurezza]
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      DOMINIO: ${DOMINIO}
+      ACME_EMAIL: ${ACME_EMAIL:?manca ACME_EMAIL in .env.production}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificati e chiavi di Let's Encrypt: da non perdere (limiti di emissione).
+      - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
