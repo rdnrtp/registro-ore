@@ -18,58 +18,58 @@ function TestoEmail({ email }) {
   );
 }
 
-// Stato dell'invio di un mese e versioni inviate (dalla più recente).
+// Storico degli invii di un mese: stato attuale e tutte le versioni inviate
+// (dalla più recente), con sostituzioni, riaperture e file da scaricare.
 // io = true nel proprio mese (i testi parlano al collaboratore).
 // onScarica(versione) scarica il file di una versione.
 export default function StatoInvio({ stato, invii, io, onScarica }) {
   if (!invii?.length) return null;
   const ultimo = invii[0];
-  const riaperto = stato !== 'inviato' && ultimo.riaperto_il;
+  const riaperto = stato !== 'inviato';
   return (
     <section className="sezione stato-invio" aria-labelledby="titolo-invio">
-      <h2 id="titolo-invio">{stato === 'inviato' ? 'Mese inviato' : 'Mese riaperto'}</h2>
-      {stato === 'inviato' ? (
-        <p>
-          {invii.length > 1 ? `Versione ${ultimo.versione}, inviata` : 'Inviato'} il <b>{dataOra(ultimo.inviato_il)}</b> a{' '}
-          <b>{ultimo.destinatario}</b>
-          {ultimo.copia.length > 0 && <> e in copia a {ultimo.copia.join(', ')}</>}. <TestoEmail email={ultimo.email} />.
+      <h2 id="titolo-invio">Storico degli invii</h2>
+      {riaperto ? (
+        <p className="avviso">
+          <b>Mese riaperto</b> il {dataOra(ultimo.riaperto_il)}
+          {ultimo.riaperto_da && ` da ${ultimo.riaperto_da}`}.{' '}
+          {io ? 'Correggi le registrazioni e invia di nuovo il mese' : 'Il collaboratore deve correggere e inviare di nuovo il mese'}: la
+          nuova email dirà che sostituisce la versione {ultimo.versione}.
         </p>
       ) : (
-        riaperto && (
-          <div className="avviso">
-            <p>
-              Riaperto il {dataOra(ultimo.riaperto_il)}
-              {ultimo.riaperto_da && ` da ${ultimo.riaperto_da}`}. Motivazione: <q>{ultimo.motivazione}</q>
-            </p>
-            <p>
-              {io ? 'Correggi le registrazioni e invia di nuovo il mese' : 'Il collaboratore deve correggere e inviare di nuovo il mese'}: la
-              nuova email dirà che sostituisce quella del {dataOra(ultimo.inviato_il)}.
-            </p>
-          </div>
-        )
+        <p>
+          Inviato il <b>{dataOra(ultimo.inviato_il)}</b> a <b>{ultimo.destinatario}</b>
+          {ultimo.copia.length > 0 && <>, in copia a {ultimo.copia.join(', ')}</>}.
+        </p>
       )}
-      <details>
-        <summary>
-          {invii.length === 1 ? 'File inviato' : `Tutte le versioni inviate (${invii.length})`}
-        </summary>
-        <ul className="elenco-invii">
-          {invii.map((v) => (
-            <li key={v.versione}>
-              <span>
-                <b>Versione {v.versione}</b> · {dataOra(v.inviato_il)} · {numero(v.ore)} ore
-                {v.sedute > 0 && ` · ${numero(v.sedute)} sedute`}
-                <small>
-                  <TestoEmail email={v.email} />
-                  {v.riaperto_il && ` · riaperta il ${dataOra(v.riaperto_il)}: ${v.motivazione}`}
-                </small>
-              </span>
-              <button type="button" className="collegamento" onClick={() => onScarica(v.versione)}>
-                {v.nome_file}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </details>
+      <ol className="elenco-invii" reversed>
+        {invii.map((v) => (
+          <li key={v.versione}>
+            <div className="invio-testa">
+              <b>Versione {v.versione}</b>
+              {v.versione === ultimo.versione && !riaperto && <span className="etichetta inviato">in vigore</span>}
+              {v.riaperto_il && <span className="etichetta riaperto">riaperta</span>}
+            </div>
+            <span>
+              Inviata il {dataOra(v.inviato_il)}
+              {v.versione > 1 ? ` · sostituisce la versione ${v.versione - 1}` : ' · primo invio'} · {numero(v.ore)} ore
+              {v.sedute > 0 && ` · ${numero(v.sedute)} sedute`}
+            </span>
+            <small>
+              <TestoEmail email={v.email} />
+            </small>
+            {v.riaperto_il && (
+              <small className="motivazione">
+                Riaperta il {dataOra(v.riaperto_il)}
+                {v.riaperto_da && ` da ${v.riaperto_da}`}. Motivazione: «{v.motivazione}»
+              </small>
+            )}
+            <button type="button" className="piccolo neutro scarica-versione" onClick={() => onScarica(v.versione)}>
+              Scarica {v.nome_file}
+            </button>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }

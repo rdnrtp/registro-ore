@@ -23,6 +23,10 @@ export default function Mese({ attivita, mie }) {
   const [avvisoVuoto, setAvvisoVuoto] = useState(false);
   const [invio, setInvio] = useState(null); // riepilogo prima dell'invio
   const [inviando, setInviando] = useState(false);
+  const [annullamento, setAnnullamento] = useState(null); // anteprima di "Annulla precompilazione"
+  const [selezione, setSelezione] = useState(null); // giorni scelti per svuotarli, null = modalità spenta
+  const [svuotamento, setSvuotamento] = useState(false); // conferma dello svuotamento
+  const [attesa, setAttesa] = useState(false);
   const rifOggi = useRef(null);
   const daPosizionare = useRef(true);
   const { anno, mese } = periodo;
@@ -53,6 +57,7 @@ export default function Mese({ attivita, mie }) {
 
   function vaiA(nuovo, suOggi = false) {
     setDati(null);
+    setSelezione(null);
     setAvviso('');
     setErrore('');
     setPeriodo(nuovo);
@@ -141,6 +146,70 @@ export default function Mese({ attivita, mie }) {
     }
   }
 
+  async function apriAnnullamento() {
+    setAvviso('');
+    setErrore('');
+    try {
+      setAnnullamento(await api.anteprimaAnnullaPrecompilazione(anno, mese));
+    } catch (err) {
+      setErrore(err.message);
+    }
+  }
+
+  async function confermaAnnullamento() {
+    setAttesa(true);
+    try {
+      const r = await api.annullaPrecompilazione(anno, mese);
+      setAvviso(`Precompilazione annullata: ${r.giorni.length === 1 ? 'tolto 1 giorno' : `tolti ${r.giorni.length} giorni`}.`);
+    } catch (err) {
+      setErrore(err.message);
+    }
+    setAttesa(false);
+    setAnnullamento(null);
+    ricarica();
+  }
+
+  // Modalità di selezione: i giorni toccati si aggiungono o si tolgono.
+  function scegli(data) {
+    setSelezione((s) => {
+      const nuova = new Set(s);
+      if (nuova.has(data)) nuova.delete(data);
+      else nuova.add(data);
+      return nuova;
+    });
+  }
+  const tuttiIGiorni = () => {
+    const n = new Date(Date.UTC(anno, mese, 0)).getUTCDate();
+    return Array.from({ length: n }, (_, i) => `${anno}-${String(mese).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`);
+  };
+  // Cosa cancellerebbe lo svuotamento dei giorni scelti.
+  const daSvuotare = useMemo(() => {
+    const giorni = [...(selezione ?? [])].filter((d) => perGiorno.has(d)).sort();
+    let ore = 0;
+    let sedute = 0;
+    for (const d of giorni) {
+      for (const r of perGiorno.get(d)) {
+        if (perId.get(r.attivita_id)?.unita === 'sedute') sedute += r.quantita;
+        else ore += r.quantita;
+      }
+    }
+    return { giorni, ore, sedute };
+  }, [selezione, perGiorno, perId]);
+
+  async function confermaSvuotamento() {
+    setAttesa(true);
+    try {
+      const r = await api.svuotaGiorni(anno, mese, daSvuotare.giorni);
+      setAvviso(`Svuotat${r.giorni.length === 1 ? 'o 1 giorno' : `i ${r.giorni.length} giorni`}: tolte ${numero(r.ore)} ore${r.sedute ? ` e ${numero(r.sedute)} sedute` : ''}.`);
+      setSelezione(null);
+    } catch (err) {
+      setErrore(err.message);
+    }
+    setAttesa(false);
+    setSvuotamento(false);
+    ricarica();
+  }
+
   const nGiorni = precompilazione?.giorni.length ?? 0;
   const parolaGiorni = nGiorni === 1 ? 'giorno' : 'giorni';
 
@@ -164,7 +233,7 @@ export default function Mese({ attivita, mie }) {
                   </>
                 )}
                 {solaLettura && <span className="etichetta inviato">inviato il {dataOra(dati.invii[0]?.inviato_il ?? Date.now())}</span>}
-                {!solaLettura && dati.invii.length > 0 && <span className="etichetta riaperto">riaperto: da inviare di nuovo</span>}
+                {!solaLettura && dati.invii.length > 0 && <span className="etichetta riaperto">riaperto</span>}
               </>
             )}
           </span>
@@ -181,6 +250,16 @@ export default function Mese({ attivita, mie }) {
           {dati && !solaLettura && (
             <button type="button" className="piccolo" onClick={apriPrecompilazione}>
               Precompila il mese
+            </button>
+          )}
+          {dati && !solaLettura && dati.precompilazione_annullabile > 0 && (
+            <button type="button" className="piccolo neutro" onClick={apriAnnullamento}>
+              Annulla precompilazione
+            </button>
+          )}
+          {dati && !solaLettura && !selezione && (
+            <button type="button" className="piccolo neutro" onClick={() => setSelezione(new Set())}>
+              Seleziona giorni
             </button>
           )}
           {dati && !solaLettura && (
@@ -210,6 +289,11 @@ export default function Mese({ attivita, mie }) {
       {!dati && !errore && <p className="caricamento">Caricamento…</p>}
       {dati && (
         <>
+          <StatoInvio stato={dati.stato} invii={dati.invii} io onScarica={scaricaVersione} />
+
+          {selezione && (
+            <p className="avviso riquadro">Tocca i giorni da svuotare, poi «Svuota» in basso. Le sedute PT con il nome del cliente non vengono toccate.</p>
+          )}
           <ElencoGiorni
             anno={anno}
             mese={mese}
@@ -217,11 +301,10 @@ export default function Mese({ attivita, mie }) {
             perId={perId}
             oggi={oggi}
             rifOggi={rifOggi}
-            onApri={setGiornoAperto}
+            onApri={selezione ? scegli : setGiornoAperto}
+            selezionati={selezione}
             testoVuotoOggi="Oggi · tocca per inserire"
           />
-
-          <StatoInvio stato={dati.stato} invii={dati.invii} io onScarica={scaricaVersione} />
 
           <TotaliMese nomeMese={nomeMese} totali={totali} perId={perId} />
 
@@ -235,6 +318,101 @@ export default function Mese({ attivita, mie }) {
             onCambiate={ricarica}
           />
         </>
+      )}
+
+      {selezione && dati && !solaLettura && (
+        <div className="barra-selezione" role="toolbar" aria-label="Giorni selezionati">
+          <span>
+            <b>{selezione.size}</b> {selezione.size === 1 ? 'giorno' : 'giorni'}
+          </span>
+          <button
+            type="button"
+            className="piccolo neutro"
+            onClick={() => setSelezione(selezione.size === tuttiIGiorni().length ? new Set() : new Set(tuttiIGiorni()))}
+          >
+            {selezione.size === tuttiIGiorni().length ? 'Nessuno' : 'Tutto il mese'}
+          </button>
+          <button type="button" className="piccolo pericolo" onClick={() => setSvuotamento(true)} disabled={!daSvuotare.giorni.length}>
+            Svuota
+          </button>
+          <button type="button" className="piccolo" onClick={() => setSelezione(null)}>
+            Fine
+          </button>
+        </div>
+      )}
+
+      {svuotamento && (
+        <Foglio
+          titolo="Svuota i giorni selezionati"
+          onChiudi={() => setSvuotamento(false)}
+          piede={
+            <div className="pulsanti">
+              <button type="button" className="neutro" onClick={() => setSvuotamento(false)}>
+                Annulla
+              </button>
+              <button type="button" className="conferma-pericolo" onClick={confermaSvuotamento} disabled={attesa}>
+                Svuota {daSvuotare.giorni.length} {daSvuotare.giorni.length === 1 ? 'giorno' : 'giorni'}
+              </button>
+            </div>
+          }
+        >
+          <p>
+            Verranno cancellate <b>{numero(daSvuotare.ore)} ore</b>
+            {daSvuotare.sedute > 0 && (
+              <>
+                {' '}e <b>{numero(daSvuotare.sedute)} sedute</b>
+              </>
+            )}{' '}
+            in <b>{daSvuotare.giorni.length}</b> {daSvuotare.giorni.length === 1 ? 'giorno' : 'giorni'}.
+          </p>
+          {selezione.size > daSvuotare.giorni.length && (
+            <p className="dettaglio">
+              {selezione.size - daSvuotare.giorni.length} dei giorni selezionati sono già vuoti.
+            </p>
+          )}
+          <p className="dettaglio">Le sedute di personal training con il nome del cliente restano. Non si può annullare.</p>
+        </Foglio>
+      )}
+
+      {annullamento && (
+        <Foglio
+          titolo="Annulla precompilazione"
+          onChiudi={() => setAnnullamento(null)}
+          piede={
+            annullamento.giorni.length ? (
+              <div className="pulsanti">
+                <button type="button" className="neutro" onClick={() => setAnnullamento(null)}>
+                  Annulla
+                </button>
+                <button type="button" className="conferma-pericolo" onClick={confermaAnnullamento} disabled={attesa}>
+                  Togli da {annullamento.giorni.length} {annullamento.giorni.length === 1 ? 'giorno' : 'giorni'}
+                </button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setAnnullamento(null)}>
+                Chiudi
+              </button>
+            )
+          }
+        >
+          {annullamento.giorni.length ? (
+            <>
+              <p>
+                Verranno tolte le registrazioni create dall&apos;ultima precompilazione di {nomeMese}:{' '}
+                <b>{numero(annullamento.ore)} ore</b>
+                {annullamento.sedute > 0 && ` e ${numero(annullamento.sedute)} sedute`} in <b>{annullamento.giorni.length}</b>{' '}
+                {annullamento.giorni.length === 1 ? 'giorno' : 'giorni'}. Quelle che hai modificato o aggiunto a mano restano.
+              </p>
+              <ul className="elenco-date">
+                {annullamento.giorni.map((d) => (
+                  <li key={d}>{etichettaData(d)}</li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p>Non c&apos;è più niente da annullare: le registrazioni dell&apos;ultima precompilazione sono già state tolte o modificate.</p>
+          )}
+        </Foglio>
       )}
 
       {giornoAperto && dati && (

@@ -39,8 +39,9 @@ export function usaRiepilogo(registrazioni, perId) {
 }
 
 // Elenco dei giorni del mese con le voci registrate. Senza onApri i giorni
-// non si toccano (sola lettura).
-export function ElencoGiorni({ anno, mese, perGiorno, perId, oggi, rifOggi, onApri, testoVuotoOggi }) {
+// non si toccano (sola lettura). Con selezionati (Set di date) l'elenco è in
+// modalità di selezione: ogni giorno mostra se è scelto.
+export function ElencoGiorni({ anno, mese, perGiorno, perId, oggi, rifOggi, onApri, testoVuotoOggi, selezionati }) {
   const giorni = useMemo(() => giorniDelMese(anno, mese), [anno, mese]);
   const eSedute = (id) => perId.get(id)?.unita === 'sedute';
   return (
@@ -52,8 +53,10 @@ export function ElencoGiorni({ anno, mese, perGiorno, perId, oggi, rifOggi, onAp
         if (settimana === 6) classi.push('sabato');
         if (settimana === 7) classi.push('domenica');
         if (data === oggi) classi.push('oggi');
+        if (selezionati?.has(data)) classi.push('selezionato');
         const contenuto = (
           <>
+            {selezionati && <span className="spunta" aria-hidden="true">{selezionati.has(data) ? '✓' : ''}</span>}
             <span className="giorno-data">
               <span className="giorno-numero">{giorno}</span>
               <span className="giorno-settimana">{GIORNI_BREVI[settimana - 1]}</span>
@@ -83,7 +86,12 @@ export function ElencoGiorni({ anno, mese, perGiorno, perId, oggi, rifOggi, onAp
         return (
           <li key={data}>
             {onApri ? (
-              <button type="button" {...comuni} onClick={() => onApri(data)}>
+              <button
+                type="button"
+                {...comuni}
+                aria-pressed={selezionati ? selezionati.has(data) : undefined}
+                onClick={() => onApri(data)}
+              >
                 {contenuto}
               </button>
             ) : (

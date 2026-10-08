@@ -11,6 +11,7 @@ export default function SchedaGiorno({ data, attivita, mie, registrazioni, solaL
   const [valori, setValori] = useState(iniziali);
   const [errore, setErrore] = useState('');
   const [invio, setInvio] = useState(false);
+  const [svuota, setSvuota] = useState(false); // conferma di "Svuota giorno"
   const perId = useMemo(() => new Map(attivita.map((a) => [a.id, a])), [attivita]);
 
   const ore = oreTotali(valori, perId);
@@ -38,6 +39,23 @@ export default function SchedaGiorno({ data, attivita, mie, registrazioni, solaL
     }
   }
 
+  // Svuota il giorno: toglie tutte le quantità salvate (non le sedute PT con cliente).
+  async function svuotaGiorno() {
+    setInvio(true);
+    try {
+      await api.svuotaGiorni(Number(data.slice(0, 4)), Number(data.slice(5, 7)), [data]);
+      onSalvato();
+    } catch (err) {
+      setErrore(err.message);
+      setInvio(false);
+      setSvuota(false);
+    }
+  }
+  const salvate = registrazioni.reduce(
+    (t, r) => (perId.get(r.attivita_id)?.unita === 'sedute' ? { ...t, sedute: t.sedute + r.quantita } : { ...t, ore: t.ore + r.quantita }),
+    { ore: 0, sedute: 0 },
+  );
+
   const troppe = ore > MAX_ORE;
   const piede = (
     <>
@@ -54,6 +72,21 @@ export default function SchedaGiorno({ data, attivita, mie, registrazioni, solaL
         <button type="button" onClick={onChiudi}>
           Chiudi
         </button>
+      ) : svuota ? (
+        <>
+          <p>
+            Svuotare il giorno? Verranno cancellate <b>{numero(salvate.ore)} ore</b>
+            {salvate.sedute > 0 && ` e ${numero(salvate.sedute)} sedute`}.
+          </p>
+          <div className="pulsanti">
+            <button type="button" className="neutro" onClick={() => setSvuota(false)}>
+              No
+            </button>
+            <button type="button" className="conferma-pericolo" onClick={svuotaGiorno} disabled={invio}>
+              Sì, svuota
+            </button>
+          </div>
+        </>
       ) : (
         <div className="pulsanti">
           <button type="button" className="neutro" onClick={onChiudi}>
@@ -76,6 +109,11 @@ export default function SchedaGiorno({ data, attivita, mie, registrazioni, solaL
         </p>
       )}
       <EditorQuantita attivita={attivita} mie={mie} valori={valori} onCambia={cambia} solaLettura={solaLettura} />
+      {!solaLettura && registrazioni.length > 0 && (
+        <button type="button" className="piccolo pericolo svuota-giorno" onClick={() => setSvuota(true)} disabled={invio || svuota}>
+          Svuota giorno
+        </button>
+      )}
     </Foglio>
   );
 }

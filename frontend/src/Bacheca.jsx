@@ -128,13 +128,13 @@ export default function Bacheca({ aperto, utente, onLetto }) {
               <a href={`#/bacheca/${a.id}`} className={a.da_leggere ? 'da-leggere' : ''}>
                 <span className="avviso-titolo">
                   {a.titolo}
+                  {a.importante && <span className="etichetta importante">importante</span>}
+                  {a.da_leggere && <span className="etichetta nuovo">{a.letto_il ? 'modificato' : 'da leggere'}</span>}
                   <small>
                     {dataOra(a.pubblicato_il)} · {a.autore}
                     {a.modificato_il && ' · modificato'}
                   </small>
                 </span>
-                {a.importante && <span className="etichetta importante">importante</span>}
-                {a.da_leggere && <span className="etichetta nuovo">{a.letto_il ? 'modificato' : 'da leggere'}</span>}
               </a>
             </li>
           ))}

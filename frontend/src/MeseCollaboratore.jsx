@@ -151,8 +151,8 @@ export default function MeseCollaboratore({ id, anno, mese, attivita, utente }) 
             {dati.solo_settori_propri && ' Vedi solo le attività dei tuoi settori.'}
             {!dati.utente.attivo && ' Utente disattivato.'}
           </p>
-          <ElencoGiorni anno={anno} mese={mese} perGiorno={perGiorno} perId={perId} oggi={oggiIso()} />
           {admin && <StatoInvio stato={dati.stato} invii={dati.invii} onScarica={scaricaVersione} />}
+          <ElencoGiorni anno={anno} mese={mese} perGiorno={perGiorno} perId={perId} oggi={oggiIso()} />
           <TotaliMese nomeMese={nomeMese} totali={totali} perId={perId} />
           {dati.sedute_pt && (
             <SedutePt

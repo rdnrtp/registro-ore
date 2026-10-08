@@ -1131,17 +1131,24 @@ button.invia {
 
 .elenco-invii {
   list-style: none;
-  margin: 8px 0 0;
+  margin: 12px 0 0;
   padding: 0;
 }
 
 .elenco-invii li {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--colore-bordo);
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--colore-bordo);
   overflow-wrap: anywhere;
+}
+
+.invio-testa {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .elenco-invii small {
@@ -1149,29 +1156,57 @@ button.invia {
   color: var(--colore-secondario);
 }
 
-.elenco-invii button.collegamento {
-  align-self: flex-start;
-  min-height: 36px;
-  text-align: left;
+.elenco-invii small.motivazione {
+  color: var(--colore-testo);
+  background: var(--colore-avviso-sfondo);
+  border-radius: 6px;
+  padding: 4px 8px;
 }
 
-/* Quadro degli invii: riga da toccare più il pulsante "Sollecita". */
+button.scarica-versione {
+  max-width: 100%;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  text-align: left;
+  height: auto;
+  padding: 6px 12px;
+}
+
+.stato-invio p.avviso {
+  margin-bottom: 8px;
+}
+
+/* Quadro degli invii: la riga è la scheda; dentro, il collegamento al mese
+   (nome, ore) e in fondo il badge dello stato oppure il pulsante "Sollecita".
+   Le regole di .elenco-persone a/button (larghe quanto la riga) qui non valgono. */
 .elenco-persone.quadro li {
   display: flex;
-  gap: 6px;
-  align-items: stretch;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding-right: 12px;
+  border-radius: 10px;
+  background: var(--colore-scheda);
 }
 
 .elenco-persone.quadro li > a {
   flex: 1;
   min-width: 0;
+  width: auto;
+  background: transparent;
 }
 
-button.sollecita {
-  min-height: 0;
-  padding: 0 10px;
+.elenco-persone.quadro button.sollecita {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--colore-principale);
+  background: transparent;
+  color: var(--colore-principale);
   font-size: 0.85rem;
-  background: var(--colore-scheda);
+  font-weight: 600;
 }
 
 .etichetta.manca {
@@ -1344,4 +1379,99 @@ select {
   display: inline-block;
   margin-left: 8px;
   text-transform: none;
+}
+
+/* Email inviate: "Riprova" non si allarga a tutta la riga. */
+.registro li button.collegamento {
+  align-self: flex-start;
+}
+
+/* Correzioni rapide: selezione dei giorni, svuota. */
+.giorno .spunta {
+  flex: 0 0 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--colore-bordo);
+  border-radius: 6px;
+  background: var(--colore-scheda);
+  color: #fff;
+  font-weight: 700;
+}
+
+.giorno.selezionato {
+  background: #fde2e1;
+}
+
+.giorno.selezionato .spunta {
+  background: var(--colore-pericolo);
+  border-color: var(--colore-pericolo);
+}
+
+.barra-selezione {
+  position: sticky;
+  bottom: calc(var(--altezza-schede) + env(safe-area-inset-bottom));
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--colore-scheda);
+  border-top: 1px solid var(--colore-bordo);
+  box-shadow: 0 -2px 6px rgb(0 0 0 / 0.08);
+}
+
+.barra-selezione span {
+  flex: 1;
+}
+
+button.conferma-pericolo {
+  background: var(--colore-pericolo);
+}
+
+button.svuota-giorno {
+  margin-top: 16px;
+}
+
+/* Filtri delle email: piccoli, su una riga quando ci stanno. */
+.filtri button {
+  flex: 1 1 auto;
+  min-height: 40px;
+  padding: 0 10px;
+  font-size: 0.9rem;
+}
+
+/* "Apri" è un collegamento come gli altri comandi, non una riga dell'elenco. */
+.azioni-avviso a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  background: none;
+  color: var(--colore-principale);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* Quadro, su schermi larghi: badge e "Sollecita" della stessa larghezza, così le
+   ore restano in colonna. Al telefono no: il nome ha bisogno dello spazio. */
+@media (min-width: 600px) {
+  .elenco-persone.quadro li > .etichetta,
+  .elenco-persone.quadro button.sollecita {
+    min-width: 9rem;
+    text-align: center;
+    justify-content: center;
+  }
+}
+
+.avviso-titolo .etichetta {
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.riassunto .etichetta {
+  white-space: nowrap;
 }

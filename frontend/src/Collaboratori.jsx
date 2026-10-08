@@ -124,12 +124,14 @@ export default function Collaboratori({ anno, mese, utente }) {
                   <b>{numero(c.ore)} h</b>
                   {c.sedute > 0 && <small>{numero(c.sedute)} sedute</small>}
                 </span>
-                <Stato c={c} />
               </a>
-              {admin && c.manca && c.password_impostata && (
-                <button type="button" className="sollecita neutro" onClick={() => sollecita(c)} disabled={inCorso === c.id}>
+              {/* Al posto del badge, per chi manca, il pulsante per sollecitarlo. */}
+              {admin && c.manca && c.password_impostata ? (
+                <button type="button" className="sollecita" onClick={() => sollecita(c)} disabled={inCorso === c.id}>
                   Sollecita
                 </button>
+              ) : (
+                <Stato c={c} />
               )}
             </li>
           ))}
