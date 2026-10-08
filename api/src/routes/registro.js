@@ -110,7 +110,7 @@ function rotteRegistro({ pool, config }) {
     const u = req.utente;
     const periodo = `AND $3::date <= %s AND %s < ($3::date + interval '1 month')`;
     const inizio = `${anno}-${String(mese).padStart(2, '0')}-01`;
-    const [registrazioni, sedute, stato, org, invii] = await Promise.all([
+    const [registrazioni, sedute, stato, org, invii, precompilazione] = await Promise.all([
       pool.query(`${SELECT_REGISTRAZIONI} ${periodo.replaceAll('%s', 'entry_date')} ORDER BY entry_date`, [
         u.id,
         u.organizzazioneId,
@@ -126,6 +126,7 @@ function rotteRegistro({ pool, config }) {
       statoMese(pool, u, anno, mese),
       pool.query('SELECT pt_sessions_per_kind FROM organizations WHERE id = $1', [u.organizzazioneId]),
       elencoInvii(pool, { orgId: u.organizzazioneId, utenteId: u.id, anno, mese }),
+      ultimaPrecompilazione(pool, u, anno, mese),
     ]);
     res.json({
       anno,
@@ -136,6 +137,8 @@ function rotteRegistro({ pool, config }) {
       sedute_pt: sedute.rows,
       // Versioni inviate, dalla più recente (vuoto se il mese non è mai stato inviato).
       invii,
+      // Giorni che "Annulla precompilazione" toccherebbe (0 = niente da annullare).
+      precompilazione_annullabile: precompilazione.giorni.length,
     });
   });
 
@@ -168,8 +171,12 @@ function rotteRegistro({ pool, config }) {
         }
         // Un'attività disattivata non accetta nuove righe; quelle già presenti
         // si possono ancora correggere o togliere.
+        // Una quantità cambiata a mano non appartiene più alla precompilazione
+        // che l'aveva creata: annullarla non la toglie.
         const r = await client.query(
-          `UPDATE time_entries SET quantity = $5, updated_at = now()
+          `UPDATE time_entries
+              SET quantity = $5, updated_at = now(),
+                  prefill_run_id = CASE WHEN quantity = $5 THEN prefill_run_id END
             WHERE user_id = $1 AND organization_id = $2 AND entry_date = $3 AND activity_id = $4`,
           [u.id, u.organizzazioneId, data.testo, v.attivita_id, v.quantita],
         );
@@ -233,15 +240,103 @@ function rotteRegistro({ pool, config }) {
     const giorni = await transazione(pool, async (client) => {
       await bloccaUtente(client, u);
       await verificaMeseAperto(client, u, anno, mese);
-      const { rows } = await client.query(
-        `INSERT INTO time_entries (organization_id, user_id, activity_id, entry_date, quantity)
-         SELECT $2, $1, activity_id, giorno, quantity FROM (${GIORNI_DA_RIEMPIRE}) da_riempire
-         RETURNING entry_date AS giorno`,
-        parametriPrecompilazione(u, anno, mese),
+      const giro = await client.query(
+        'INSERT INTO prefill_runs (organization_id, user_id, year, month) VALUES ($1, $2, $3, $4) RETURNING id',
+        [u.organizzazioneId, u.id, anno, mese],
       );
+      const { rows } = await client.query(
+        `INSERT INTO time_entries (organization_id, user_id, activity_id, entry_date, quantity, prefill_run_id)
+         SELECT $2, $1, activity_id, giorno, quantity, $6 FROM (${GIORNI_DA_RIEMPIRE}) da_riempire
+         RETURNING entry_date AS giorno`,
+        [...parametriPrecompilazione(u, anno, mese), giro.rows[0].id],
+      );
+      // Una precompilazione che non ha riempito nulla non conta come "ultima".
+      if (!rows.length) await client.query('DELETE FROM prefill_runs WHERE id = $1', [giro.rows[0].id]);
       return dateDistinte(rows);
     });
     res.json({ giorni_riempiti: giorni });
+  });
+
+  // ------------------------------------------------------ Correzioni rapide
+
+  // Righe ancora intatte dell'ultima precompilazione (non annullata) del mese:
+  // { giro, giorni: ['AAAA-MM-GG'], righe, ore, sedute }.
+  async function ultimaPrecompilazione(db, u, anno, mese) {
+    const { rows } = await db.query(
+      `WITH giro AS (
+         SELECT id FROM prefill_runs
+          WHERE user_id = $1 AND organization_id = $2 AND year = $3 AND month = $4 AND undone_at IS NULL
+          ORDER BY created_at DESC LIMIT 1)
+       SELECT (SELECT id FROM giro) AS giro, t.entry_date AS data, t.quantity AS quantita, a.unit AS unita
+         FROM time_entries t
+         JOIN activities a ON a.id = t.activity_id AND a.organization_id = t.organization_id
+        WHERE t.prefill_run_id = (SELECT id FROM giro) AND t.user_id = $1 AND t.organization_id = $2
+        ORDER BY t.entry_date`,
+      [u.id, u.organizzazioneId, anno, mese],
+    );
+    return { giro: rows[0]?.giro ?? null, ...riepilogoRighe(rows) };
+  }
+
+  // Giorni distinti e totali di un elenco di righe { data, quantita, unita }.
+  function riepilogoRighe(righe) {
+    const somma = (unita) => righe.filter((r) => r.unita === unita).reduce((t, r) => t + r.quantita, 0);
+    return { giorni: [...new Set(righe.map((r) => r.data))].sort(), righe: righe.length, ore: somma('ore'), sedute: somma('sedute') };
+  }
+
+  // Anteprima: quanti giorni e quante ore toglierebbe l'annullamento.
+  router.get('/mese/:anno/:mese/annulla-precompilazione', async (req, res) => {
+    const { anno, mese } = annoMeseDaParametri(req.params);
+    const { giro, ...riepilogo } = await ultimaPrecompilazione(pool, req.utente, anno, mese);
+    res.json(riepilogo);
+  });
+
+  // Toglie le registrazioni create dall'ultima precompilazione del mese, tranne
+  // quelle modificate a mano dopo. I giorni compilati a mano non cambiano.
+  router.post('/mese/:anno/:mese/annulla-precompilazione', async (req, res) => {
+    const { anno, mese } = annoMeseDaParametri(req.params);
+    const u = req.utente;
+    const risultato = await transazione(pool, async (client) => {
+      await bloccaUtente(client, u);
+      await verificaMeseAperto(client, u, anno, mese);
+      const { giro, ...riepilogo } = await ultimaPrecompilazione(client, u, anno, mese);
+      if (!riepilogo.righe) throw new ErroreHttp(409, 'Non c\'è nessuna precompilazione da annullare in questo mese.');
+      await client.query('DELETE FROM time_entries WHERE prefill_run_id = $1 AND user_id = $2 AND organization_id = $3', [
+        giro,
+        u.id,
+        u.organizzazioneId,
+      ]);
+      await client.query('UPDATE prefill_runs SET undone_at = now() WHERE id = $1', [giro]);
+      return riepilogo;
+    });
+    res.json(risultato);
+  });
+
+  // Svuota i giorni indicati del mese: toglie tutte le quantità di quei
+  // giorni (non le sedute PT con il nome del cliente, che sono a parte).
+  // Corpo: { giorni: ['AAAA-MM-GG', ...] }, tutti del mese indicato.
+  router.post('/mese/:anno/:mese/svuota', async (req, res) => {
+    const { anno, mese } = annoMeseDaParametri(req.params);
+    const elenco = req.body?.giorni;
+    if (!Array.isArray(elenco) || !elenco.length || elenco.length > 31) throw nonValido('Indica i giorni da svuotare');
+    const date = elenco.map((g) => {
+      const d = dataDa(g);
+      if (d.anno !== anno || d.mese !== mese) throw nonValido(`Il giorno ${g} non è del mese indicato`);
+      return d.testo;
+    });
+    const u = req.utente;
+    const risultato = await transazione(pool, async (client) => {
+      await bloccaUtente(client, u);
+      await verificaMeseAperto(client, u, anno, mese);
+      const { rows } = await client.query(
+        `DELETE FROM time_entries t USING activities a
+          WHERE t.user_id = $1 AND t.organization_id = $2 AND t.entry_date = ANY($3::date[])
+            AND a.id = t.activity_id AND a.organization_id = t.organization_id
+          RETURNING t.entry_date AS data, t.quantity AS quantita, a.unit AS unita`,
+        [u.id, u.organizzazioneId, [...new Set(date)]],
+      );
+      return riepilogoRighe(rows);
+    });
+    res.json(risultato);
   });
 
   // ------------------------------------------------------- Orario tipo
