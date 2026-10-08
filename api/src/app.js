@@ -12,6 +12,7 @@ const { rotteCollaboratori } = require('./routes/collaboratori');
 const { rotteEsportazione } = require('./routes/esportazione');
 const { rotteInvio } = require('./routes/invio');
 const { rottePosta } = require('./routes/posta');
+const { rotteBacheca } = require('./routes/bacheca');
 const { ErroreHttp } = require('./errori');
 
 function creaApp({ pool, config }) {
@@ -39,6 +40,7 @@ function creaApp({ pool, config }) {
   app.use('/api', rotteEsportazione({ pool, config }));
   app.use('/api', rotteInvio({ pool, config }));
   app.use('/api', rottePosta({ pool, config }));
+  app.use('/api', rotteBacheca({ pool, config }));
 
   app.use('/api', (req, res) => res.status(404).json({ errore: 'Non trovato' }));
 

@@ -149,6 +149,77 @@ describe('isolamento tra organizzazioni', () => {
     assert.deepEqual(await fotografia(), prima);
   });
 
+  it('rotte della Fase 5: gli identificativi di B rispondono 404 e B non cambia', async () => {
+    const adminB = await accedi(app, B.admin.email);
+    const avvisoB = (await adminB.post('/api/avvisi').send({ titolo: 'Di B', testo: 'Solo per B', per_tutti: true })).body;
+    const emailB = (
+      await pool.query("UPDATE email_outbox SET status = 'errore' WHERE organization_id = $1 RETURNING id", [B.id])
+    ).rows[0].id;
+    // Un mese di settembre inviato dal collaboratore di B.
+    await pool.query(
+      `INSERT INTO month_submissions (organization_id, user_id, year, month, status, submitted_at)
+       VALUES ($1, $2, 2026, 9, 'inviato', now())`,
+      [B.id, B.collaboratore.id],
+    );
+    await pool.query(
+      `INSERT INTO month_submission_versions (organization_id, user_id, year, month, version, file, file_name, file_sha256,
+         template_version, to_address, cc_addresses, total_hours, total_sessions, pt_sessions)
+       VALUES ($1, $2, 2026, 9, 1, '\\x00', 'b.xlsx', repeat('0', 64), 1, 'segreteria@b.test', '{}', 0, 0, 0)`,
+      [B.id, B.collaboratore.id],
+    );
+    const fotografia = async () =>
+      (
+        await pool.query(
+          `SELECT (SELECT json_agg(a ORDER BY id) FROM announcements a WHERE organization_id = $1) AS avvisi,
+                  (SELECT json_agg(r ORDER BY user_id) FROM announcement_reads r WHERE organization_id = $1) AS letture,
+                  (SELECT json_agg(e ORDER BY id) FROM email_outbox e WHERE organization_id = $1) AS email,
+                  (SELECT json_agg(n ORDER BY id) FROM notifications n WHERE organization_id = $1) AS notifiche,
+                  (SELECT json_agg(s ORDER BY id) FROM month_submissions s WHERE organization_id = $1) AS mesi,
+                  (SELECT json_agg(json_build_object('id', v.id, 'riaperto', v.reopened_at)) FROM month_submission_versions v
+                    WHERE organization_id = $1) AS invii,
+                  (SELECT json_agg(u ORDER BY id) FROM users u WHERE organization_id = $1) AS utenti`,
+          [B.id],
+        )
+      ).rows[0];
+    const prima = await fotografia();
+    const collabB = `/api/collaboratori/${B.collaboratore.id}/mese/2026/9`;
+    const tentativi = [
+      ['get', `${collabB}/invii/1/file`],
+      ['post', `${collabB}/riapertura`, { motivazione: 'Presa' }],
+      ['post', `${collabB}/sollecito`],
+      ['get', `/api/avvisi/${avvisoB.id}`],
+      ['post', `/api/avvisi/${avvisoB.id}/letto`],
+      ['get', `/api/avvisi/${avvisoB.id}/letture`],
+      ['patch', `/api/avvisi/${avvisoB.id}`, { titolo: 'Preso', per_tutti: true }],
+      ['post', `/api/avvisi/${avvisoB.id}/ritiro`],
+      ['post', `/api/email/${emailB}/riprova`],
+      ['patch', `/api/utenti/${B.collaboratore.id}`, { esonerato_invio: true }],
+    ];
+    for (const [metodo, rotta, corpo] of tentativi) {
+      const res = await adminA[metodo](rotta).send(corpo ?? {});
+      assert.equal(res.status, 404, `${metodo} ${rotta}`);
+      assert.deepEqual(res.body, { errore: 'Non trovato' });
+    }
+    for (const [metodo, rotta] of [
+      ['get', `/api/avvisi/${avvisoB.id}`],
+      ['post', `/api/avvisi/${avvisoB.id}/letto`],
+      ['get', '/api/mese/2026/9/invii/1/file'],
+    ]) {
+      assert.equal((await collabA[metodo](rotta)).status, 404, `${metodo} ${rotta}`);
+    }
+    // Elenchi: niente di B.
+    assert.deepEqual((await adminA.get('/api/email')).body.email.filter((e) => e.id === emailB), []);
+    assert.ok(!(await adminA.get('/api/avvisi/gestione')).body.avvisi.some((a) => a.id === avvisoB.id));
+    assert.ok(!(await collabA.get('/api/avvisi')).body.avvisi.some((a) => a.id === avvisoB.id));
+    assert.equal((await collabA.get('/api/avvisi/non-letti')).body.non_letti, 0);
+    assert.equal((await adminA.post('/api/avvisi').send({ titolo: 'X', testo: 'Y', per_tutti: false, settori: [B.settore] })).status, 400);
+    // Il mese di settembre di A è aperto e senza invii.
+    const meseA = (await collabA.get('/api/mese/2026/9')).body;
+    assert.deepEqual([meseA.stato, meseA.invii], ['aperto', []]);
+
+    assert.deepEqual(await fotografia(), prima);
+  });
+
   it('un identificativo non valido risponde 404 e non errore 500', async () => {
     assert.equal((await adminA.get("/api/attivita/1' OR '1'='1")).status, 404);
     assert.equal((await adminA.get('/api/settori/123')).status, 404);
