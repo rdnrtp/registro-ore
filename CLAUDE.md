@@ -103,8 +103,16 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   `#/gestione[/utenti|attivita|settori|bacheca|impianto|email|registro]` =
   `Gestione.jsx` e `Gestione*.jsx`, `RegistroModifiche.jsx`. `VistaMese.jsx`
   = parti comuni alle viste del mese (elenco dei giorni, totali, `salvaFile`);
-  `StatoInvio.jsx` = stato dell'invio e versioni inviate (proprio mese e mese
-  di un collega).
+  `StatoInvio.jsx` = "Storico degli invii" (stato attuale, ogni versione con
+  data e ora, sostituzione, motivazione della riapertura, file da scaricare),
+  in cima alla vista del mese, sopra i giorni: nel proprio mese e, solo per
+  l'amministratore, nel mese di un collega. Nella vista del mese: "Annulla
+  precompilazione" (solo se c'è qualcosa da annullare) e "Seleziona giorni"
+  (modalità di selezione di `ElencoGiorni` con `selezionati`, barra in basso
+  con "Tutto il mese", "Svuota", "Fine"); "Svuota giorno" nella scheda del giorno.
+  CSS: le regole di `.elenco-persone a, button` rendono ogni elemento largo
+  quanto la riga; per un pulsante dentro una riga (es. "Sollecita" nel quadro)
+  vanno annullate esplicitamente.
   `SchedaGiorno.jsx`, la precompilazione e le schede di gestione usano
   `Foglio.jsx` (pannello dal basso); `EditorQuantita.jsx` (contatori − valore
   + ) serve sia alla scheda del giorno sia all'orario tipo; `SedutePt.jsx`
@@ -236,6 +244,14 @@ Migrazione `008_bacheca.sql`:
   modifica, con i destinatari di allora), `announcement_reads` (ultima
   apertura; letto = aperto dopo l'ultima modifica).
 
+Migrazione `009_correzioni.sql`:
+
+- `prefill_runs`: ogni precompilazione che ha riempito almeno un giorno
+  (utente, anno, mese, `undone_at` = annullata).
+- `time_entries.prefill_run_id`: precompilazione che ha creato la riga; torna
+  null quando la quantità viene cambiata a mano (un salvataggio con lo stesso
+  valore non conta). Le righe inserite a mano non ce l'hanno.
+
 Chiavi primarie UUID. Ogni tabella con dati di un impianto ha `organization_id`;
 le chiavi esterne tra tabelle dell'organizzazione sono composte
 `(id, organization_id)`, così il database rifiuta collegamenti tra
@@ -292,6 +308,15 @@ mai modificare uno già applicato.
 - `GET|POST /api/mese/:anno/:mese/precompilazione`: anteprima / applicazione
   dell'orario tipo ai giorni senza nessuna registrazione (le sedute PT non
   contano). Riempie anche i giorni futuri e i festivi, se l'orario li prevede.
+  Le righe create portano l'id della precompilazione (`prefill_run_id`).
+- `GET|POST /api/mese/:anno/:mese/annulla-precompilazione`: anteprima `{ giorni,
+  righe, ore, sedute }` / cancellazione delle righe ancora intatte
+  dell'ultima precompilazione non annullata del mese (409 se non ce ne sono).
+  `GET /api/mese` ha `precompilazione_annullabile` = giorni che toccherebbe.
+- `POST /api/mese/:anno/:mese/svuota` `{ giorni: ['AAAA-MM-GG', …] }` (1–31
+  date di quel mese): cancella tutte le quantità di quei giorni, non le sedute
+  PT con cliente; risponde `{ giorni, righe, ore, sedute }` effettivamente tolti.
+  Usata sia da "Svuota giorno" sia dalla selezione di più giorni.
 - `GET|PUT /api/orario-tipo` `{ voci: [{ giorno_settimana: 1..7, attivita_id,
   quantita }] }`: il PUT sostituisce tutto l'orario.
 - `GET|PUT /api/mie-attivita` `{ attivita: [id] }`: il PUT sostituisce l'elenco.
@@ -461,7 +486,8 @@ Coda e promemoria (`src/posta/coda.js`, `src/promemoria.js`):
   a destra) non entrano in nessun totale. Da chiarire con BV.
 - Sedute PT nelle tabelle in ordine di data (a parità, di inserimento), data
   come data Excel con formato `dd/mm/yyyy`.
-- Test: `test/invio.test.js` (invio del mese, sul modello reale di BV),
+- Test: `test/correzioni.test.js` (annulla precompilazione, svuota giorni),
+  `test/invio.test.js` (invio del mese, sul modello reale di BV),
   `test/posta.test.js`, `test/promemoria.test.js`, `test/bacheca.test.js`.
   Le email nei test passano da `trasportoFinto()` (`test/helpers.js`).
 - Test: `test/excel.test.js` genera e rilegge i file sul modello reale di BV
