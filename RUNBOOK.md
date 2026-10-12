@@ -19,6 +19,20 @@ uno, il comando fallisce senza fare danni.
 | «TUA_EMAIL» | la tua email | `mario@esempio.it` |
 | «FILE_BACKUP» | nome di un file di backup, come appare negli elenchi | `registro-ore_2026-11-02_023001.dump.age` |
 
+**Questa installazione (BV, messa online il 12/10/2026).** Valori reali, non
+segreti; il diario dei passi è in `deploy/PROGRESSO.md`.
+
+| Segnaposto / voce | Valore |
+|---|---|
+| «IP_SERVER» | `152.228.240.155` (VPS OVHcloud `vps-218669e7`, Ubuntu 24.04; IPv6 `2001:41d0:305:2100::1:87d2`, senza record AAAA) |
+| «UTENTE» | `registro` |
+| «DOMINIO» | `presenze.apetris.com` |
+| «UTENTE_GITHUB» | `rdnrtp` (repository `rdnrtp/registro-ore`, deploy key "server") |
+| «TUA_EMAIL» | `rdnrtp@gmail.com` (anche `ACME_EMAIL` e `ALLARMI_EMAIL`) |
+| SMTP | Brevo, `smtp-relay.brevo.com:587` (STARTTLS), mittente `notifiche@apetris.com` (dominio `apetris.com` autenticato su Brevo) |
+| Backup fuori dal server | Backblaze B2 (S3), endpoint `https://s3.eu-central-003.backblazeb2.com`, regione `eu-central-003`, bucket privato `registro-apetris`, `BACKUP_REMOTO=remoto:registro-apetris/registro-ore` |
+| Console di emergenza | Control Panel OVHcloud → Bare Metal Cloud → Virtual Private Servers → `vps-218669e7` → Home → **KVM**; si entra con `registro` e la sua password di sudo (le regole SSH non valgono lì). Ultima risorsa: Boot → modalità rescue |
+
 **Dove si scrivono i comandi.**
 
 - `PC>` = PowerShell sul tuo PC Windows, nella cartella del progetto
@@ -27,6 +41,9 @@ uno, il comando fallisce senza fare danni.
   `server$` non va copiato. Quasi tutti i comandi si lanciano dalla cartella
   dell'app: `cd /opt/registro-ore`.
 - `root#` = terminale del server come root (solo al passo 4).
+
+Da Windows usa l'`ssh` di PowerShell: quello di Git Bash non vede le chiavi
+caricate nell'agente SSH di Windows (risponde `Permission denied (publickey)`).
 
 **Regola d'oro.** I segreti (password, chiavi, `.env.production`) non si
 mandano per email o chat, nemmeno a me: vanno solo nel gestore di password
@@ -121,7 +138,20 @@ root# bash /root/prepara-server.sh «UTENTE»
 ```
 
 Alla prima connessione SSH chiede di confermare l'impronta del server:
-rispondi `yes`. Lo script:
+rispondi `yes`.
+
+**Su OVHcloud (e altri fornitori con un utente iniziale)** non si entra come
+root: si entra come `ubuntu`, che ha sudo senza password, e
+`/root/.ssh/authorized_keys` è vuoto. In quel caso la chiave va passata
+esplicitamente (quella con cui entri come `ubuntu`):
+
+```
+PC> scp deploy\prepara-server.sh ubuntu@«IP_SERVER»:/tmp/
+PC> ssh -t ubuntu@«IP_SERVER» 'sudo bash /tmp/prepara-server.sh «UTENTE» "$(head -n1 ~/.ssh/authorized_keys)"'
+```
+
+Dopo lo script `ubuntu` non può più entrare via SSH (`AllowUsers`): si
+lavora solo come «UTENTE». Lo script:
 
 - imposta il fuso orario Europe/Rome e aggiorna il sistema;
 - crea «UTENTE» e ti chiede **la sua password, che serve solo per `sudo`**
@@ -220,7 +250,17 @@ uscire.) Ogni voce è spiegata nel file. Sostituisci ogni valore che contiene
 | `BACKUP_REMOTO` e righe `RCLONE_…` | sezione 9.2 (si può fare dopo) |
 
 Se una password contiene il carattere `$`, scrivila tra apici singoli:
-`SMTP_PASSWORD='abc$def'`.
+`SMTP_PASSWORD='abc$def'`. **Eccezione: le righe `RCLONE_…` vanno scritte
+senza virgolette** (le legge Docker, che le passerebbe a rclone tali e quali).
+In nano salva con `Ctrl+O` **e Invio** (deve comparire "Wrote … lines").
+
+Per controllare senza mostrare i valori:
+
+```
+server$ grep -E '^[A-Z_]+=.*SOSTITUISCI' .env.production | cut -d= -f1
+```
+
+Dopo il passo 6.3 non deve stampare nulla.
 
 ### 6.3 Chiave dei backup
 
@@ -264,6 +304,11 @@ server$ mkdir -p /opt/registro-ore/modello
 PC> scp modello\modello_bv.xlsx «UTENTE»@«IP_SERVER»:/opt/registro-ore/modello/
 PC> scp seed\bv\contatti.json «UTENTE»@«IP_SERVER»:/opt/registro-ore/seed/bv/
 ```
+
+**Per una fase di prova** non copiare il `contatti.json` reale: copia invece
+un file con lo stesso formato in cui `emailInvio` e ogni responsabile sono
+indirizzi tuoi (sezione 11.1). Così nessuna email delle prove può arrivare
+alla segreteria o ai responsabili.
 
 ### 7.2 Avvio
 
@@ -321,6 +366,15 @@ Poi applica la configurazione:
 server$ ./deploy/compose.sh up -d
 ```
 
+**Brevo: IP autorizzati.** Brevo blocca gli invii SMTP da un indirizzo IP
+che non conosce: l'email finisce in errore con `525 5.7.1 Unauthorized IP
+address` (in **Gestione → Email inviate**) e Brevo manda al titolare
+dell'account un'email per autorizzare l'IP. Autorizza l'IP del server (o
+aggiungilo in Brevo → impostazioni di sicurezza → IP autorizzati). Se
+l'email bloccata era un invito, non si può "riprovare" (contiene il link):
+genera un nuovo link da **Gestione → Utenti**. Va rifatto se il server
+cambia IP (sezione 14).
+
 ### 8.2 Record DNS del mittente (SPF, DKIM, DMARC)
 
 Servono perché le email non finiscano nello spam o vengano rifiutate. Vanno
@@ -346,8 +400,10 @@ Attenzione:
 ### 8.3 Prova
 
 1. Dall'app: **Gestione → Utenti → crea un utente** con un tuo secondo
-   indirizzo (es. un account Gmail). Deve arrivare l'email con il link di
-   invito.
+   indirizzo (con Gmail basta `«nome»+prova@gmail.com`: arriva nella tua
+   casella ma è un utente distinto). Deve arrivare l'email con il link di
+   invito. Il link si vede anche nell'app subito dopo la creazione e vale
+   allo stesso modo: chi lo usa per primo imposta la password.
 2. In Gmail: apri l'email → menu ⋮ → **Mostra originale**: SPF, DKIM e DMARC
    devono essere tutti **PASS**.
 3. In **Gestione → Email inviate** non devono esserci email in errore.
@@ -407,7 +463,11 @@ server$ ./deploy/scarica-backup.sh
 ```
 
 Il primo deve dire "Copia fuori dal server completata"; il secondo elenca le
-copie remote.
+copie remote. Per Backblaze B2 vanno bene `PROVIDER=Other` e l'endpoint S3
+del bucket (con `https://`); il keyID è `ACCESS_KEY_ID`, l'applicationKey è
+`SECRET_ACCESS_KEY`. Il primo backup giornaliero vale anche come primo
+settimanale e mensile: su B2 compaiono tre file uguali (sul server sono
+hard link, quindi lo spazio è uno solo).
 
 ### 9.3 Prova di ripristino (da fare ora, e poi ogni 3 mesi)
 
@@ -421,10 +481,16 @@ server$ ./deploy/scarica-backup.sh ultimo
 server$ ./deploy/ripristina.sh ~/ripristino/«FILE_BACKUP»
 ```
 
-Incolla la chiave privata quando richiesto (non si vede). Lo script
-ripristina in un database separato, mostra una tabella con i conteggi del
-backup accanto a quelli attuali (devono essere uguali o quasi) e finisce
-con **PROVA RIUSCITA**. Poi:
+(`scarica-backup.sh ultimo` prende l'ultima copia di `giornalieri/`: se c'è
+solo un backup manuale, lancia prima `sudo systemctl start
+registro-ore-backup`.) `ripristina.sh` chiede la chiave privata **subito**,
+prima di fare qualsiasi cosa: incolla solo la riga `AGE-SECRET-KEY-1…` e premi
+Invio (non si vede nulla, nemmeno asterischi). Chiave sbagliata = si ferma
+senza toccare niente. Lo script ripristina in un database separato, mostra
+una tabella con i conteggi del backup accanto a quelli attuali (devono essere
+uguali o quasi) e finisce con **PROVA RIUSCITA**. **Copia prima la tabella**
+(per annotare l'esito), **poi** chiudi il terminale e svuota gli appunti.
+Infine:
 
 ```
 server$ rm ~/ripristino/*
@@ -483,19 +549,79 @@ Healthchecks.io (piano gratuito):
 
 - [ ] `https://«DOMINIO»` si apre con il lucchetto; `http://«DOMINIO»` porta su https.
 - [ ] Email di invito arrivata, SPF/DKIM/DMARC **PASS** (8.3).
-- [ ] Prova di invio del mese **senza disturbare segreteria e responsabili**:
-  in **Gestione → Impianto e modello Excel** metti temporaneamente come
-  indirizzo di invio «TUA_EMAIL»; nel tuo mese registra **solo una seduta di
-  personal training** con cliente "PROVA" e nessuna ora (le ore metterebbero
-  in copia i responsabili dei settori); invia il mese e controlla email e
-  allegato. Poi **rimetti l'indirizzo della segreteria**, riapri il mese
-  (**Colleghi** → il tuo nome → Riapri il mese) e cancella la seduta di prova.
+- [ ] Prova di invio del mese **senza disturbare segreteria e responsabili**
+  (sezione 11.1): invio, copie ai settori giusti, allegato che si apre in
+  Excel, riapertura e reinvio "SOSTITUISCE IL PRECEDENTE".
+- [ ] **Indirizzi reali di BV** al posto di quelli di prova (11.2).
 - [ ] Backup notturno attivo, copia fuori dal server, **prova di ripristino riuscita** (9).
 - [ ] Monitoraggio attivo (10).
 - [ ] Gestore di password con: password di sudo, chiave privata dei backup
   (anche su carta), `.env.production`, accessi ai fornitori.
 - [ ] Informativa sulla privacy completata e verificata dal consulente di BV
   (pagina `https://«DOMINIO»/#/privacy`, file `frontend/src/Privacy.jsx`).
+
+### 11.1 Fase di prova: nessuna email a BV
+
+L'app spedisce solo a: l'indirizzo di invio dell'organizzazione, gli
+indirizzi dei responsabili dei settori (in copia all'invio del mese), gli
+utenti creati nell'app e `ALLARMI_EMAIL`. Per la prova:
+
+- sul server `seed/bv/contatti.json` è un file **di prova**: `emailInvio` =
+  «TUA_EMAIL» e ogni responsabile = `«nome»+«settore»@gmail.com` (arriva
+  tutto a te, e il `+…` dice quale settore sarebbe stato in copia). Il file
+  reale resta sul PC;
+- gli unici utenti sono il tuo amministratore e un utente di prova con un
+  tuo indirizzo `+prova`;
+- controllo che nel database non ci sia nessun indirizzo diverso dai tuoi
+  (sostituisci `rdnrtp` con la parte prima della @ del tuo indirizzo):
+
+```
+server$ ./deploy/compose.sh exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <<'SQL'
+WITH tutti AS (
+  SELECT submission_email AS e, 'invio organizzazione' AS dove FROM organizations
+  UNION ALL SELECT unnest(manager_emails), 'responsabili settore' FROM sectors
+  UNION ALL SELECT email, 'utenti' FROM users
+  UNION ALL SELECT unnest(to_addresses || cc_addresses), 'email in coda/inviate' FROM email_outbox
+)
+SELECT dove || ': ' || count(*) || ', non di prova: ' || count(*) FILTER (WHERE lower(e) NOT LIKE 'rdnrtp%@gmail.com') FROM tutti GROUP BY dove;
+SQL
+```
+
+Ogni riga deve finire con `non di prova: 0`. Finché è così, nessuna email
+può raggiungere BV. Durante la prova **non creare utenti** con indirizzi di
+colleghi e **non modificare** le email dei settori dall'app.
+
+Prova fatta il 12/10/2026 con l'utente "Prova Uno" (`rdnrtp+prova@gmail.com`):
+mese di ottobre con ore su Nuoto e Pulizie/Manutenzione e una seduta PT;
+copia a `+manutenzione`, `+pulizie`, `+nuoto`, `+prova`; riapertura e
+reinvio (versione 2, "SOSTITUISCE IL PRECEDENTE").
+
+### 11.2 Passaggio agli indirizzi reali di BV (al via libera)
+
+1. Nessuna modifica di settori o attività fatta dall'app durante la prova
+   (vedi **Gestione → Registro delle modifiche**)? Allora la via più sicura è
+   ricaricare i file, con il `contatti.json` **reale**:
+
+   ```
+   PC> scp seed\bv\contatti.json «UTENTE»@«IP_SERVER»:/opt/registro-ore/seed/bv/contatti.json
+   server$ cd /opt/registro-ore
+   server$ ./deploy/compose.sh exec api npm run carica-organizzazione -- bv --sovrascrivi
+   ```
+
+   Riporta indirizzo di invio, settori, email dei responsabili, abbinamenti e
+   attività ai file; utenti, ore e mesi inviati restano.
+   Se invece hai cambiato qualcosa dall'app, non usare `--sovrascrivi`
+   (cancellerebbe quelle modifiche): cambia a mano **Gestione → Impianto e
+   modello Excel** (indirizzo di invio) e **Gestione → Settori** (email dei
+   responsabili, uno per uno).
+2. Controlla in **Gestione → Impianto** l'indirizzo di invio e in **Gestione →
+   Settori** le email: devono essere quelle del regolamento del modello.
+3. Utente di prova: **Gestione → Utenti → Prova Uno → disattiva**. Il suo
+   mese di prova resta (visibile solo all'amministratore, tra i colleghi di
+   ottobre).
+4. Il primo invio vero partirà alla segreteria: avvisala che le email
+   arrivano da `POSTA_MITTENTE` (per BV `notifiche@apetris.com`) con il nome
+   del collega ("Nome Cognome tramite Registro ore").
 
 ---
 
@@ -569,6 +695,7 @@ versione precisa: `./deploy/rilascia.sh «COMMIT»` (elenco delle versioni:
 Se il server è perso (guasto, compromesso, cambio di fornitore):
 
 1. crea un nuovo VPS (passo 3) e aggiorna il record DNS A con il nuovo IP;
+   autorizza il nuovo IP anche nel servizio SMTP (Brevo, sezione 8.1);
 2. passi 4 e 5;
 3. invece del passo 6: `nano /opt/registro-ore/.env.production` e incolla il
    contenuto salvato nel gestore di password; poi `chmod 600 .env.production`;

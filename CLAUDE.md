@@ -54,7 +54,8 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   nel database (`email_outbox`) elaborata dall'API in sottofondo, mai dentro la
   richiesta dell'utente. In sviluppo la posta va alla casella finta Mailpit del
   Compose; in produzione a un servizio SMTP generico (porta 587 con STARTTLS
-  obbligatorio, o 465), ancora da scegliere.
+  obbligatorio, o 465): per BV Brevo (`smtp-relay.brevo.com:587`, mittente
+  `notifiche@apetris.com`; Brevo accetta solo IP autorizzati).
 - Notifiche agli utenti (promemoria, solleciti, avvisi, riaperture) solo
   attraverso `notifica()` (`src/notifiche.js`), che le salva e le consegna con
   ogni canale di `CANALI`: oggi l'email; dopo la messa online il push sarà un
@@ -66,8 +67,9 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   per passo in `RUNBOOK.md` (scritto per chi non è sistemista).
 - Backup: `pg_dump` cifrato con age a chiave pubblica; la chiave privata non sta
   sul server (gestore di password + carta). Copia fuori dal server con rclone
-  (S3 o SFTP, fornitore da scegliere), configurata solo da variabili
-  `RCLONE_CONFIG_REMOTO_*`. Email ad `ALLARMI_EMAIL` se fallisce.
+  (S3 o SFTP; per BV Backblaze B2 via S3, bucket `registro-apetris`),
+  configurata solo da variabili `RCLONE_CONFIG_REMOTO_*` (senza virgolette:
+  le legge `docker --env-file`). Email ad `ALLARMI_EMAIL` se fallisce.
 - Accesso del server al repository privato con una deploy key in sola lettura.
 - Un mese inviato conserva il file esattamente come è partito
   (`month_submission_versions`); dopo una riapertura il reinvio è una nuova
@@ -575,15 +577,26 @@ Coda e promemoria (`src/posta/coda.js`, `src/promemoria.js`):
 3. Esportazione Excel — **completata**
 4. Multiutente e ruoli — **completata**
 5. Chiusura mese, invio email, promemoria, bacheca — **completata**
-6. Stabilità e deploy sul VPS — **preparata e provata su questo PC** (stack di
-   produzione con certificato locale, backup/ripristino, S3 e SFTP finti,
-   rilascio e ritorno indietro); messa online in attesa di VPS, dominio,
-   servizio SMTP e spazio per i backup. Notifiche push: dopo la messa online.
+6. Stabilità e deploy sul VPS — **online dal 12/10/2026, in fase di prova**:
+   https://presenze.apetris.com, VPS OVHcloud `152.228.240.155` (utente
+   `registro`, app in `/opt/registro-ore`), valori reali e differenze in
+   `RUNBOOK.md` (in alto e 11.1–11.2), diario in `deploy/PROGRESSO.md`.
+   Provati: HTTPS, invito, invio del mese con copie, riapertura e reinvio,
+   backup notturno e manuale su B2, ripristino di prova. Durante la prova sul
+   server c'è un `contatti.json` **di prova** (tutti gli indirizzi sono di
+   rdnrtp@gmail.com, con `+settore`): nessuna email può arrivare a BV. Il
+   passaggio agli indirizzi reali è RUNBOOK 11.2, solo dopo il via libera.
+   Notifiche push: dopo la messa online.
 7. Riepilogo per la direzione
 
 Lavora una fase alla volta e fermati alla fine di ciascuna per il resoconto.
 
-Punti aperti dopo la preparazione della Fase 6:
+Punti aperti della Fase 6:
+
+- Prima dei colleghi: indirizzi reali di BV (RUNBOOK 11.2), disattivare
+  l'utente "Prova Uno", monitoraggio di `/api/stato` e Healthchecks per il
+  backup (RUNBOOK 10), DMARC di `apetris.com` più severo (`p=quarantine`)
+  se oggi è `p=none`, dopo qualche settimana senza problemi.
 
 - Informativa sulla privacy (`frontend/src/Privacy.jsx`): bozza con le parti
   `<Dc>` da completare; titolare BV, da far verificare al loro consulente. Il
