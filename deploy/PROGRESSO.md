@@ -72,11 +72,19 @@ il server condiviso di Brevo (77.32.148.25). Da ricontrollare il 15/10
 (compare "Consegnata" in ritardo?); se si ripete, ticket a Brevo con il
 Message-ID.
 
+## Rilascio del 14/10/2026, ore 17:25 (`6f43d93`)
+
+Rilascio minimo per la prova dell'aggiornamento: l'app installata, lasciata
+aperta in sottofondo, al ritorno in primo piano si è ricaricata da sola con
+la versione nuova.
+
 ## Da fare
 
 - [ ] `sudo ufw status` mai visto da Claude (lo script l'ha mostrato ad Andrea).
 - [ ] Monitoraggio `/api/stato` e Healthchecks del backup (RUNBOOK 10).
 - [ ] Informativa sulla privacy completata e verificata.
 - [ ] Email non consegnate a Gmail il 14/10 (sopra): capire prima di invitare i colleghi.
-- [ ] Prova dell'aggiornamento automatico dell'app installata (secondo rilascio).
+- [ ] Prova "Aggiorna" con una finestra aperta: aprire la scheda di un giorno
+  PRIMA del rilascio, poi tornare sull'app (il 14/10 la scheda è stata aperta
+  dopo il ritorno in primo piano, quando l'app si era già ricaricata da sola).
 - [ ] Al via libera: indirizzi reali di BV e disattivazione di Prova Uno (RUNBOOK 11.2).
