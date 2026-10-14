@@ -7,8 +7,10 @@ const NOME_APP = 'Presenze';
 const COLORE_TEMA = '#0b6e99';
 const COLORE_SFONDO = '#f2f5f7';
 
-// Versione di questa compilazione: ogni rilascio ne ha una nuova. L'app
-// aperta la confronta con /versione.json per accorgersi di un rilascio.
+// Versione di questa compilazione: ogni rilascio che cambia il frontend ne
+// ha una nuova (se il frontend non cambia, Docker riusa la compilazione e la
+// versione resta quella: non c'è niente da aggiornare). L'app aperta la
+// confronta con /versione.json per accorgersi di un rilascio.
 const VERSIONE = new Date().toISOString();
 
 const manifest = {

@@ -52,9 +52,31 @@ indirizzi reali: `RUNBOOK.md` 11.1 e 11.2.
   uguali), `~/ripristino` ripulito.
 - [x] RUNBOOK.md e CLAUDE.md aggiornati.
 
+## Rilascio del 14/10/2026 (`2bd0b9a`)
+
+Primo rilascio con `rilascia.sh` (da `af6b01f`): comandi del mese, tasto
+Indietro, password dimenticata, comando `link-password`, app installabile.
+Migrazione 011 applicata, 4 servizi healthy, versione `2026-10-14T14:19:40Z`.
+Controllati dal server: tipi e `Cache-Control: no-cache` di `/`, `sw.js`,
+manifest, `versione.json`, icone; `/api/stato` ok. `link-password` provato
+su Prova Uno (link usato, password cambiata). Dal telefono Android: vista
+del mese, Indietro, installazione, pagina offline, Excel dall'app
+installata ok.
+
+Email: le email delle prove di oggi (password dimenticata, avviso delle
+16:57 a `rdnrtp+prova@`) risultano in Brevo solo "Inviata", senza
+"Consegnata", e non sono arrivate in Gmail; il reinoltro dallo stesso
+pannello di Brevo è arrivato. Le email del 12/10 risultano consegnate.
+L'app le ha prese in carico correttamente. Ipotesi: ritardo di Gmail verso
+il server condiviso di Brevo (77.32.148.25). Da ricontrollare il 15/10
+(compare "Consegnata" in ritardo?); se si ripete, ticket a Brevo con il
+Message-ID.
+
 ## Da fare
 
 - [ ] `sudo ufw status` mai visto da Claude (lo script l'ha mostrato ad Andrea).
 - [ ] Monitoraggio `/api/stato` e Healthchecks del backup (RUNBOOK 10).
 - [ ] Informativa sulla privacy completata e verificata.
+- [ ] Email non consegnate a Gmail il 14/10 (sopra): capire prima di invitare i colleghi.
+- [ ] Prova dell'aggiornamento automatico dell'app installata (secondo rilascio).
 - [ ] Al via libera: indirizzi reali di BV e disattivazione di Prova Uno (RUNBOOK 11.2).
