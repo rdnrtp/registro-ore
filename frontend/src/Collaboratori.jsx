@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { NOMI_MESI, maiuscola, meseVicino, numero } from './date.js';
 import { NavigazioneMese } from './VistaMese.jsx';
+import { naviga } from './navigazione.js';
 
 const dataBreve = (iso) =>
   new Date(iso).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
@@ -43,7 +44,7 @@ export default function Collaboratori({ anno, mese, utente }) {
     const m = meseVicino(anno, mese, delta);
     setDati(null);
     setAvviso('');
-    window.location.hash = `#/collaboratori/${m.anno}/${m.mese}`;
+    naviga(`#/collaboratori/${m.anno}/${m.mese}`);
   };
   const nomeMese = `${NOMI_MESI[mese - 1]} ${anno}`;
   const elenco = dati?.anno === anno && dati?.mese === mese ? dati.collaboratori : [];
@@ -71,7 +72,7 @@ export default function Collaboratori({ anno, mese, utente }) {
       <div className="testata-mese">
         <NavigazioneMese titolo={maiuscola(nomeMese)} onPrecedente={() => vai(-1)} onSuccessivo={() => vai(1)} />
         {dati && admin && (
-          <div className="azioni-mese">
+          <div className="totale-mese">
             <p className="riassunto">
               {inviati} {inviati === 1 ? 'inviato' : 'inviati'} · <b>{mancano}</b> {mancano === 1 ? 'manca' : 'mancano'}
             </p>
@@ -82,10 +83,12 @@ export default function Collaboratori({ anno, mese, utente }) {
           </div>
         )}
         {dati && !admin && (
-          <p className="riassunto">
-            {elenco.length} {elenco.length === 1 ? 'collaboratore' : 'collaboratori'} · {inviati}{' '}
-            {inviati === 1 ? 'mese inviato' : 'mesi inviati'}
-          </p>
+          <div className="totale-mese">
+            <p className="riassunto">
+              {elenco.length} {elenco.length === 1 ? 'collaboratore' : 'collaboratori'} · {inviati}{' '}
+              {inviati === 1 ? 'mese inviato' : 'mesi inviati'}
+            </p>
+          </div>
         )}
       </div>
       {!admin && (

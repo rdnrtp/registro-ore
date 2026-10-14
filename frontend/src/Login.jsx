@@ -53,6 +53,9 @@ export default function Login({ onAccesso }) {
         <button type="submit" disabled={invio}>
           {invio ? 'Accesso in corso…' : 'Accedi'}
         </button>
+        <a className="link-secondario" href="#/password-dimenticata">
+          Password dimenticata?
+        </a>
         <a className="link-privacy" href="#/privacy">
           Informativa sulla privacy
         </a>

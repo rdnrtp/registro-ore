@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import Foglio from './Foglio.jsx';
 import { dataOra } from './GestioneUtenti.jsx';
+import { naviga } from './navigazione.js';
 
 // Testo di un avviso con i suoi a capo.
 export const TestoAvviso = ({ testo }) => <p className="testo-avviso">{testo}</p>;
@@ -33,6 +34,7 @@ function DettaglioAvviso({ id, onChiudi, onLetto }) {
     <Foglio
       titolo={avviso?.titolo ?? 'Avviso'}
       onChiudi={onChiudi}
+      conIndietro={false}
       piede={
         <button type="button" onClick={onChiudi}>
           Chiudi
@@ -87,7 +89,6 @@ function DettaglioAvviso({ id, onChiudi, onLetto }) {
 export default function Bacheca({ aperto, utente, onLetto }) {
   const [avvisi, setAvvisi] = useState(null);
   const [errore, setErrore] = useState('');
-  const [versione, setVersione] = useState(0);
 
   useEffect(() => {
     let attivo = true;
@@ -98,12 +99,10 @@ export default function Bacheca({ aperto, utente, onLetto }) {
     return () => {
       attivo = false;
     };
-  }, [versione]);
+    // Si ricarica anche alla chiusura di un avviso (Indietro o Chiudi): ora è letto.
+  }, [aperto]);
 
-  const chiudi = () => {
-    window.location.hash = '#/bacheca';
-    setVersione((v) => v + 1);
-  };
+  const chiudi = () => naviga('#/bacheca');
 
   return (
     <div className="contenuto">

@@ -86,6 +86,14 @@ function caricaConfig(env = process.env) {
       maxFallitiPerEmail: intero(env, 'LOGIN_MAX_FALLITI_PER_EMAIL', 5),
       maxFallitiPerIp: intero(env, 'LOGIN_MAX_FALLITI_PER_IP', 30),
     },
+    // "Password dimenticata?": validità del link e richieste ammesse (tutte,
+    // non solo quelle fallite) per email e per IP nella finestra.
+    reimpostazione: {
+      durataMinuti: intero(env, 'RESET_DURATA_MINUTI', 60),
+      finestraMinuti: intero(env, 'RESET_FINESTRA_MINUTI', 60),
+      maxPerEmail: intero(env, 'RESET_MAX_PER_EMAIL', 3),
+      maxPerIp: intero(env, 'RESET_MAX_PER_IP', 10),
+    },
     // Indirizzo dell'app visto dagli utenti: serve per i link nelle email.
     // Non si ricava dalla richiesta, che potrebbe indicare un host qualsiasi.
     appUrl: (env.APP_URL || 'http://localhost:8088').replace(/\/+$/, ''),

@@ -27,7 +27,9 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   token, mai dai dati inviati dal client; ruolo e stato attivo dal database a
   ogni richiesta. Nessuna registrazione pubblica: l'amministratore crea
   l'utente e gli manda un link di invito personale (monouso, con scadenza) con
-  cui sceglie la password. Lo stesso link serve per la password dimenticata.
+  cui sceglie la password. Per la password dimenticata: "Password
+  dimenticata?" nella pagina di accesso (link per email, monouso, 60
+  minuti) oppure, in emergenza, il comando `link-password` sul server.
 - Sessioni registrate sul server (`user_sessions`, durata 7 giorni): "Esci"
   invalida davvero il token di quel dispositivo (PC condivisi, es. reception);
   "Esci da tutti i dispositivi" chiude ogni sessione dell'utente.
@@ -45,6 +47,13 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   modello.
 - Excel generato sul server con ExcelJS partendo dal modello originale, per
   conservarne formattazione, celle unite e testo del regolamento.
+- App installabile (PWA): manifest generato da `vite.config.js` (nome
+  provvisorio "Presenze" in `NOME_APP`, solo lì), icone provvisorie in
+  `frontend/public/icone/` (`scripts/genera-icone.mjs`), service worker
+  `public/sw.js` che non mette in cache nulla (solo pagina "Nessuna
+  connessione"). Aggiornamento dopo un rilascio: vedi "App installabile".
+- Tasto Indietro: chiude la finestra aperta; da una sezione torna al Mese;
+  dal Mese esce. Vedi `navigazione.js`.
 - Ogni utente ha un "orario tipo" settimanale che precompila il mese; poi corregge
   solo le eccezioni.
 - Ore a passi di mezz'ora.
@@ -80,7 +89,8 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
 - `docker-compose.yml`: servizi `db` (PostgreSQL 17), `api` (Node/Express),
   `web` (React compilato, servito da nginx che inoltra `/api` all'API),
   `mailpit` (casella di posta finta, pagina web su http://localhost:8025, solo
-  da questo PC), `api-test` (profilo `test`, avviato solo con `docker compose run`).
+  da questo PC), `api-test` e `e2e` (profilo `test`, avviati solo con
+  `docker compose run`).
   Configurazione in `.env` (non tracciato), modello in `.env.example`.
 - `compose.prod.yml` (produzione, progetto `registro-ore-prod`): `db` senza
   porte, `api` (`AMBIENTE=produzione`, `TRUST_PROXY=2`, `cap_drop: ALL`),
@@ -132,17 +142,31 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   `src/traccia.js` (`audit_log`), `src/errori.js` (`ErroreHttp`),
   `src/validazione.js` (uuid, date, mesi, testi, email), `src/db.js`
   (`transazione`), `src/cli/` (comandi da terminale; `avviso-sistema` = email
-  diretta via SMTP ad `ALLARMI_EMAIL`, senza coda, usata da `deploy/backup.sh`),
+  diretta via SMTP ad `ALLARMI_EMAIL`, senza coda, usata da `deploy/backup.sh`;
+  `link-password` = link d'emergenza per scegliere la password, stampato),
   `migrations/NNN_nome.sql`, `test/` (node:test + supertest).
 - `frontend/`: Vite + React, nessuna libreria oltre a React. `src/App.jsx`
   sceglie tra `Privacy` (`#/privacy`, informativa in bozza, con o senza
   accesso, collegata da accesso, invito, app ed email di invito), `Invito`
-  (`#/invito/<codice>`, anche con un accesso già fatto), `Login` e `Home`; `Home.jsx` = barra delle sezioni in basso (secondo il
+  (`#/invito/<codice>`, anche con un accesso già fatto), `PasswordDimenticata`
+  (`#/password-dimenticata`, senza accesso), `Login` e `Home`, più
+  `AvvisoAggiornamento` (sempre); `Home.jsx` = barra delle sezioni in basso (secondo il
   ruolo), "Esci" in alto (pannello: questo dispositivo / tutti i dispositivi;
   se la richiesta fallisce mostra l'errore invece di fingere l'uscita, perché
   il cookie httpOnly lo cancella solo il server) e pagine scelte con l'ancora dell'indirizzo, letta da
   `navigazione.js` (`usaRotta`; `usaGuardiaModifiche` chiede conferma prima
-  di lasciare una pagina con modifiche non salvate, usata da `OrarioTipo`):
+  di lasciare una pagina con modifiche non salvate, usata da `OrarioTipo`).
+  Cronologia del browser (`navigazione.js`): tenuta sempre uguale alla
+  "catena" della pagina (`catena()`: `#/` → sezione → pagina interna, es.
+  `#/gestione/utenti` o il mese di un collega) più una voce per ogni
+  finestra aperta (`usaChiusuraIndietro`, usata da `Foglio` e dalla
+  selezione dei giorni; `conIndietro={false}` per un `Foglio` che è già una
+  pagina, come `#/bacheca/<id>`). Ogni `<a href="#/…">` passa da `naviga()`
+  (clic intercettati su `document`); mai `window.location.hash = …`. Le
+  operazioni sulla cronologia vanno in fila (`history.go` è asincrono).
+  All'apertura `avviaNavigazione()` (in `main.jsx`) costruisce la catena;
+  le voci dell'app hanno `history.state.ro`, così dopo una ricarica non si
+  ricostruisce. Pagine:
   `#/` = `Mese.jsx`, `#/attivita` = `MieAttivita.jsx`, `#/orario` =
   `OrarioTipo.jsx`, `#/collaboratori/AAAA/M` = `Collaboratori.jsx`,
   `#/collaboratori/<id>/AAAA/M` = `MeseCollaboratore.jsx` (sola lettura),
@@ -153,20 +177,39 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   `StatoInvio.jsx` = "Storico degli invii" (stato attuale, ogni versione con
   data e ora, sostituzione, motivazione della riapertura, file da scaricare),
   in cima alla vista del mese, sopra i giorni: nel proprio mese e, solo per
-  l'amministratore, nel mese di un collega. Nella vista del mese: "Annulla
-  precompilazione" (solo se c'è qualcosa da annullare) e "Seleziona giorni"
-  (modalità di selezione di `ElencoGiorni` con `selezionati`, barra in basso
-  con "Tutto il mese", "Svuota", "Fine"); "Svuota giorno" nella scheda del giorno.
+  l'amministratore, nel mese di un collega. Testata del mese (fissa in alto):
+  titolo con le frecce e `.totale-mese` (ore in grande, sedute, stato,
+  "Oggi"); sotto, `.comandi-mese` (pulsanti alti uguali, 48 px): "Invia il
+  mese" (verde) + "Altro", che apre un `Foglio` con Scarica Excel, Precompila
+  il mese, "Annulla precompilazione" (solo se c'è qualcosa da annullare) e
+  "Seleziona giorni" (modalità di selezione di `ElencoGiorni` con
+  `selezionati`, barra in basso con "Tutto il mese", "Svuota", "Fine"); mese
+  inviato = solo "Scarica Excel". Stessa testata nel mese di un collega e
+  nell'elenco dei collaboratori. Aree di tocco di almeno 44 px (controllate
+  dagli screenshot di `e2e`; eccezioni: caselle di spunta dentro etichette
+  alte, frecce ↑↓ di Gestione → Attività a 38 px). "Svuota giorno" nella
+  scheda del giorno.
   CSS: le regole di `.elenco-persone a, button` rendono ogni elemento largo
   quanto la riga; per un pulsante dentro una riga (es. "Sollecita" nel quadro)
   vanno annullate esplicitamente.
   `SchedaGiorno.jsx`, la precompilazione e le schede di gestione usano
-  `Foglio.jsx` (pannello dal basso); `EditorQuantita.jsx` (contatori − valore
+  `Foglio.jsx` (pannello dal basso, si chiude anche con Indietro); `EditorQuantita.jsx` (contatori − valore
   + ) serve sia alla scheda del giorno sia all'orario tipo; `SedutePt.jsx`
   (aggiunta, modifica, eliminazione); `date.js` (date come stringhe
   'AAAA-MM-GG', oggi = fuso Europe/Rome); `api.js` (un 401 riporta al login;
   `excelMese`/`excelDi` scaricano il file come blob; `caricaModello` manda il
   file come corpo della richiesta).
+- `e2e/`: prove nel browser con Playwright (Chromium come Chrome su
+  Android, immagine `mcr.microsoft.com/playwright`, stessa versione di
+  `@playwright/test`) contro il frontend compilato servito da `web`, con
+  l'API simulata (`test/api-finta.js`, impianto finto, oggi = 14/10/2026):
+  `indietro.spec.js`, `installabile.spec.js`, `password.spec.js`,
+  `schermate.spec.js` (screenshot a 360/390/412/1280 px in
+  `e2e/risultati/schermate/`, non tracciata; niente scorrimento
+  orizzontale né errori nella pagina; `piccoli-*.json` = elementi sotto i
+  44 px). `inoltro.js` porta `localhost:8088` a `web:80` (il service worker
+  vuole un'origine sicura). Il tasto Indietro "di sistema" di Android non si
+  può simulare: `page.goBack()` equivale al pulsante del browser.
 - `seed/<org>/`: configurazione di un'organizzazione per `carica-organizzazione`:
   `organizzazione.json` (tracciato), `contatti.json` (email reali, NON
   tracciato; formato in `contatti.example.json`), `abbinamenti.json`
@@ -199,6 +242,12 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
 - Aprire l'app dal telefono (stessa rete): `http://<IP del PC>:8088`, con una
   regola del firewall di Windows in entrata per la porta TCP 8088 (profilo
   Privato).
+- Prove nel browser: `docker compose up -d --build web` (se il frontend è
+  cambiato), poi `docker compose run --rm --build e2e`.
+- Link d'emergenza per la password (email non funzionanti, amministratore
+  bloccato fuori): `docker compose exec api npm run link-password -- --email
+  ... [--minuti 60]`. Stampa il link, non manda email, va nel registro.
+- Icone provvisorie: `cd frontend && node scripts/genera-icone.mjs`.
 - Test: `docker compose run --rm --build api-test` (usa il database
   `registro_ore_test`, creato e azzerato dai test; rifiutano nomi senza `_test`).
   I test dell'esportazione richiedono `modello/modello_bv.xlsx` sul PC.
@@ -312,6 +361,12 @@ Migrazione `010_sessioni.sql`:
   il token vale solo finché la riga esiste. I token emessi prima della 010
   (senza `sid`) non valgono più: chi era collegato rifà l'accesso una volta.
 
+Migrazione `011_password_dimenticata.sql`:
+
+- `user_invites.origin`: chi ha creato il link (`amministratore` |
+  `richiesta` = "Password dimenticata?" | `terminale` = `link-password`).
+  Finisce nei dettagli della traccia quando il link viene usato.
+
 Chiavi primarie UUID. Ogni tabella con dati di un impianto ha `organization_id`;
 le chiavi esterne tra tabelle dell'organizzazione sono composte
 `(id, organization_id)`, così il database rifiuta collegamenti tra
@@ -408,6 +463,18 @@ Pubbliche (`src/routes/inviti.js`, con limite ai tentativi falliti per IP):
 - `POST /api/inviti/:codice` `{ password }` (10–72 byte): imposta la
   password, consuma il link, aumenta `token_version` (chiude le altre
   sessioni) ed effettua l'accesso. Due richieste contemporanee: ne riesce una.
+
+- `POST /api/auth/password-dimenticata` `{ email }` (in `routes/auth.js`):
+  risposta sempre `{ ok, durata_minuti }`, che l'email esista o no (400 solo
+  per un'email non valida). Utente attivo: nuovo link (`origin = richiesta`,
+  `RESET_DURATA_MINUTI`, predefinito 60; annulla i link non usati) per
+  email, traccia `utente.reset_richiesto` (autore nullo, `origine:
+  'richiesta'`, mostrato come "Pagina di accesso"). Disattivato: nessuna
+  email, traccia `utente.reset_ignorato`. Limiti a tutte le richieste (non
+  solo le fallite): `RESET_MAX_PER_EMAIL` (3) per email da qualsiasi IP e
+  `RESET_MAX_PER_IP` (10) per IP, in `RESET_FINESTRA_MINUTI` (60); oltre =
+  429. Usare il link (`POST /api/inviti/:codice`) chiude le sessioni come
+  sempre; la traccia `utente.password_reimpostata`/`attivato` ha `origine`.
 
 Responsabile e amministratore (`src/routes/collaboratori.js`, sola lettura):
 
@@ -559,7 +626,8 @@ Coda e promemoria (`src/posta/coda.js`, `src/promemoria.js`):
   a destra) non entrano in nessun totale. Da chiarire con BV.
 - Sedute PT nelle tabelle in ordine di data (a parità, di inserimento), data
   come data Excel con formato `dd/mm/yyyy`.
-- Test: `test/sessioni.test.js` (esci, esci da tutti i dispositivi, token
+- Test: `test/password-dimenticata.test.js` (risposta uguale per tutti,
+  email, limiti, registro, comando `link-password`), `test/sessioni.test.js` (esci, esci da tutti i dispositivi, token
   copiati, sessioni scadute o di altri), `test/produzione.test.js` (controlli della configurazione, `/api/stato`,
   origine delle richieste), `test/correzioni.test.js` (annulla precompilazione, svuota giorni),
   `test/invio.test.js` (invio del mese, sul modello reale di BV),
@@ -568,6 +636,27 @@ Coda e promemoria (`src/posta/coda.js`, `src/promemoria.js`):
 - Test: `test/excel.test.js` genera e rilegge i file sul modello reale di BV
   e li confronta con il modello (celle unite, larghezze, altezze, stampa,
   stili cella per cella, regolamento, `fullCalcOnLoad`).
+
+## App installabile e aggiornamenti
+
+- `manifest.webmanifest` e `versione.json` li scrive il plugin
+  `appInstallabile` di `vite.config.js` (anche in `npm run dev`); `index.html`
+  ha `%NOME_APP%` e `%COLORE_TEMA%`. `display: standalone`, `id: '/'` (lo
+  stesso anche cambiando nome), icone 192/512 `any` e `maskable`,
+  `apple-touch-icon` 180 per Safari. Il nome nella pagina e nelle email
+  resta "Registro ore".
+- Dopo un rilascio l'app installata si aggiorna senza disinstallarla: il
+  service worker non risponde mai con file in cache (solo le aperture di
+  pagina passano da lui, e vanno in rete); `index.html`, `sw.js`,
+  `versione.json` e il manifest sono `Cache-Control: no-cache`
+  (`nginx.conf`; il manifest ha una `location` sua per il tipo); i file in
+  `/assets/` hanno l'hash nel nome. L'app rimasta aperta in sottofondo
+  confronta `__VERSIONE__` (data della compilazione) con `/versione.json`
+  quando torna in primo piano e ogni 30 minuti (`AvvisoAggiornamento.jsx`):
+  versione diversa = ricarica, oppure, con una finestra aperta o modifiche
+  non salvate, avviso "Aggiorna". `sw.js` usa `skipWaiting` + `clients.claim`.
+- Il service worker si registra solo nella versione compilata e in HTTPS
+  (o localhost): dal telefono via `http://<IP del PC>:8088` non c'è.
 
 ## Fasi
 

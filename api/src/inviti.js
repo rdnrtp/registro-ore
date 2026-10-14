@@ -9,18 +9,19 @@ const hashCodice = (codice) => crypto.createHash('sha256').update(String(codice)
 const CODICE = /^[A-Za-z0-9_-]{43}$/;
 
 // Crea un nuovo link per l'utente e annulla quelli precedenti non ancora usati.
-// Restituisce { codice, scadenza }.
-async function creaInvito(db, { organizzazioneId, utenteId, creatoDa, durataOre }) {
+// Durata in ore oppure in minuti; origine = 'amministratore' | 'richiesta' |
+// 'terminale' (vedi migrazione 011). Restituisce { codice, scadenza }.
+async function creaInvito(db, { organizzazioneId, utenteId, creatoDa, durataOre, durataMinuti, origine = 'amministratore' }) {
   await db.query('DELETE FROM user_invites WHERE user_id = $1 AND organization_id = $2 AND used_at IS NULL', [
     utenteId,
     organizzazioneId,
   ]);
   const codice = crypto.randomBytes(32).toString('base64url');
   const { rows } = await db.query(
-    `INSERT INTO user_invites (organization_id, user_id, token_hash, created_by, expires_at)
-     VALUES ($1, $2, $3, $4, now() + make_interval(hours => $5))
+    `INSERT INTO user_invites (organization_id, user_id, token_hash, created_by, expires_at, origin)
+     VALUES ($1, $2, $3, $4, now() + make_interval(mins => $5), $6)
      RETURNING expires_at`,
-    [organizzazioneId, utenteId, hashCodice(codice), creatoDa, durataOre],
+    [organizzazioneId, utenteId, hashCodice(codice), creatoDa, durataMinuti ?? durataOre * 60, origine],
   );
   return { codice, scadenza: rows[0].expires_at };
 }

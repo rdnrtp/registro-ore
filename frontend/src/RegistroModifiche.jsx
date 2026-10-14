@@ -40,6 +40,17 @@ function differenze(d) {
     .join('; ');
 }
 
+// Da dove veniva il link usato per scegliere la password (migrazione 011).
+const ORIGINI_LINK = {
+  amministratore: "creato dall'amministratore",
+  richiesta: 'chiesto con «Password dimenticata?»',
+  terminale: 'creato con il comando da terminale',
+};
+
+// Chi ha fatto l'azione: un utente, oppure nessuno (comando da terminale,
+// richiesta dalla pagina di accesso, che non ha un utente collegato).
+const autore = (v) => v.autore ?? (v.dettagli.origine === 'richiesta' ? 'Pagina di accesso' : 'Comando da terminale');
+
 function descrivi({ azione, dettagli: d }) {
   const persona = d.nome ? `${d.nome} ${d.cognome} (${d.email})` : '';
   switch (azione) {
@@ -54,13 +65,18 @@ function descrivi({ azione, dettagli: d }) {
     case 'utente.riattivato':
       return `ha riattivato ${persona}`;
     case 'utente.link_creato':
+      if (d.origine === 'terminale') return `ha creato un link per reimpostare la password di ${persona} (comando link-password)`;
       return d.scopo === 'reimposta'
         ? `ha creato un link per reimpostare la password di ${persona}`
         : `ha creato un link di invito per ${persona}`;
+    case 'utente.reset_richiesto':
+      return `ha ricevuto una richiesta di nuova password per ${persona}: link mandato per email`;
+    case 'utente.reset_ignorato':
+      return `ha ricevuto una richiesta di nuova password per ${persona}: nessuna email, ${d.motivo}`;
     case 'utente.attivato':
-      return 'ha scelto la propria password (primo accesso)';
+      return `ha scelto la propria password (primo accesso${d.origine && d.origine !== 'amministratore' ? `, link ${ORIGINI_LINK[d.origine]}` : ''})`;
     case 'utente.password_reimpostata':
-      return 'ha reimpostato la propria password con un link';
+      return `ha reimpostato la propria password con un link${d.origine ? ` ${ORIGINI_LINK[d.origine] ?? ''}` : ''}; sessioni chiuse su tutti i dispositivi`;
     case 'attivita.modificata':
       return `ha modificato l'attività «${d.attivita}»: ${differenze(d)}`;
     case 'attivita.ordine_cambiato':
@@ -131,7 +147,7 @@ export default function RegistroModifiche() {
           <li key={v.id}>
             <small>{dataOra(v.quando)}</small>
             <span>
-              <b>{v.autore ?? 'Comando da terminale'}</b> {descrivi(v)}
+              <b>{autore(v)}</b> {descrivi(v)}
             </span>
           </li>
         ))}

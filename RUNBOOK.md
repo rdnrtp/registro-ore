@@ -642,11 +642,35 @@ Tutti i comandi dalla cartella dell'app: `cd /opt/registro-ore`.
 | prossimo backup | `systemctl list-timers registro-ore-backup.timer` |
 | spazio su disco | `df -h /` |
 | simulare i promemoria di un giorno | `./deploy/compose.sh exec api npm run simula-promemoria -- --org bv --data 2026-10-25` |
+| link per la password di un utente, senza email (12.1) | `./deploy/compose.sh exec api npm run link-password -- --email «EMAIL»` |
 
 Una volta al mese: `./deploy/compose.sh ps`, `df -h /` (sotto l'80%),
 **Gestione → Email inviate** senza errori, il backup più recente in
 `ls /var/backups/registro-ore/giornalieri`. Ogni 3 mesi: prova di
 ripristino (9.3).
+
+### 12.1 Password dimenticata
+
+Di solito il collega fa da solo: nella pagina di accesso tocca **Password
+dimenticata?**, scrive la sua email e riceve un link valido 60 minuti e una
+sola volta. Usandolo sceglie la nuova password e si chiudono i suoi accessi
+su tutti i dispositivi. Ogni richiesta compare in **Gestione → Registro delle
+modifiche** (autore "Pagina di accesso"). Se l'email non arriva, il link si
+crea anche da **Gestione → Utenti → nome → nuovo link**.
+
+**Emergenza** (le email non partono, oppure l'unico amministratore non
+riesce più a entrare):
+
+```
+server$ cd /opt/registro-ore
+server$ ./deploy/compose.sh exec api npm run link-password -- --email «EMAIL»
+```
+
+Stampa il link (vale una volta sola, 60 minuti; con `--minuti 240` vale 4
+ore, al massimo 72 ore). Non manda nessuna email: copialo e consegnalo tu
+alla persona, per un canale privato (mai in un gruppo). L'azione resta nel
+registro delle modifiche come "Comando da terminale". Un utente disattivato
+va prima riattivato.
 
 ---
 
@@ -669,6 +693,12 @@ Lo script, in ordine: fa un backup, scarica il codice nuovo, costruisce le
 immagini, applica le migrazioni del database, riavvia l'app e controlla che
 risponda in HTTPS. Finisce con **RILASCIO COMPLETATO**. Meglio farlo fuori
 dagli orari di lavoro e mai l'ultimo giorno del mese.
+
+Chi ha l'app installata sul telefono non deve fare niente: all'apertura
+l'app scarica la versione nuova, e se era rimasta aperta in sottofondo si
+ricarica da sola quando torna in primo piano (o propone "Aggiorna" se in
+quel momento c'era una finestra aperta). Per controllare quale versione è
+online: `https://«DOMINIO»/versione.json` (data e ora della compilazione).
 
 ### 13.1 Se qualcosa va storto: tornare indietro
 

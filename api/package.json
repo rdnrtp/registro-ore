@@ -13,6 +13,7 @@
     "carica-organizzazione": "node src/cli/carica-organizzazione.js",
     "simula-promemoria": "node src/cli/simula-promemoria.js",
     "avviso-sistema": "node src/cli/avviso-sistema.js",
+    "link-password": "node src/cli/link-password.js",
     "test": "node --test --test-concurrency=1 \"test/**/*.test.js\""
   },
   "dependencies": {

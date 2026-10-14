@@ -7,6 +7,7 @@ import SedutePt from './SedutePt.jsx';
 import StatoInvio from './StatoInvio.jsx';
 import { dataOra } from './GestioneUtenti.jsx';
 import { ElencoGiorni, NavigazioneMese, TotaliMese, salvaFile, usaRiepilogo } from './VistaMese.jsx';
+import { ChiusuraIndietro } from './navigazione.js';
 
 const dalla = (data) => ({ anno: Number(data.slice(0, 4)), mese: Number(data.slice(5, 7)) });
 
@@ -27,6 +28,7 @@ export default function Mese({ attivita, mie }) {
   const [selezione, setSelezione] = useState(null); // giorni scelti per svuotarli, null = modalità spenta
   const [svuotamento, setSvuotamento] = useState(false); // conferma dello svuotamento
   const [attesa, setAttesa] = useState(false);
+  const [menu, setMenu] = useState(false); // pannello "Altro"
   const rifOggi = useRef(null);
   const daPosizionare = useRef(true);
   const { anno, mese } = periodo;
@@ -210,6 +212,12 @@ export default function Mese({ attivita, mie }) {
     ricarica();
   }
 
+  // Voce del pannello "Altro": chiude il pannello e fa l'azione.
+  const dalMenu = (azione) => () => {
+    setMenu(false);
+    azione();
+  };
+
   const nGiorni = precompilazione?.giorni.length ?? 0;
   const parolaGiorni = nGiorni === 1 ? 'giorno' : 'giorni';
 
@@ -221,54 +229,58 @@ export default function Mese({ attivita, mie }) {
           onPrecedente={() => vaiA(meseVicino(anno, mese, -1))}
           onSuccessivo={() => vaiA(meseVicino(anno, mese, 1))}
         />
-        <div className="azioni-mese">
-          <span className="riassunto">
-            {dati && (
-              <>
+        {/* Totale del mese: resta in vista scorrendo i giorni. */}
+        <div className="totale-mese">
+          {dati ? (
+            <p className="riassunto">
+              <span className="ore-mese">
                 <b>{numero(totali.ore)}</b> ore
-                {totali.sedute > 0 && (
-                  <>
-                    {' · '}
-                    <b>{numero(totali.sedute)}</b> sedute
-                  </>
-                )}
-                {solaLettura && <span className="etichetta inviato">inviato il {dataOra(dati.invii[0]?.inviato_il ?? Date.now())}</span>}
-                {!solaLettura && dati.invii.length > 0 && <span className="etichetta riaperto">riaperto</span>}
-              </>
-            )}
-          </span>
+              </span>
+              {totali.sedute > 0 && (
+                <span className="sedute-mese">
+                  <b>{numero(totali.sedute)}</b> sedute
+                </span>
+              )}
+              {solaLettura && <span className="etichetta inviato">inviato il {dataOra(dati.invii[0]?.inviato_il ?? Date.now())}</span>}
+              {!solaLettura && dati.invii.length > 0 && <span className="etichetta riaperto">riaperto</span>}
+            </p>
+          ) : (
+            <p className="riassunto" aria-hidden="true">
+              &nbsp;
+            </p>
+          )}
           {!eMeseCorrente && (
-            <button type="button" className="piccolo neutro" onClick={() => vaiA(meseCorrente, true)}>
+            <button type="button" className="oggi" onClick={() => vaiA(meseCorrente, true)}>
               Oggi
-            </button>
-          )}
-          {dati && (
-            <button type="button" className="piccolo" onClick={() => scaricaExcel()} disabled={scaricando}>
-              {scaricando ? 'Preparo il file…' : 'Scarica Excel'}
-            </button>
-          )}
-          {dati && !solaLettura && (
-            <button type="button" className="piccolo" onClick={apriPrecompilazione}>
-              Precompila il mese
-            </button>
-          )}
-          {dati && !solaLettura && dati.precompilazione_annullabile > 0 && (
-            <button type="button" className="piccolo neutro" onClick={apriAnnullamento}>
-              Annulla precompilazione
-            </button>
-          )}
-          {dati && !solaLettura && !selezione && (
-            <button type="button" className="piccolo neutro" onClick={() => setSelezione(new Set())}>
-              Seleziona giorni
-            </button>
-          )}
-          {dati && !solaLettura && (
-            <button type="button" className="piccolo invia" onClick={apriInvio}>
-              {dati.invii.length ? 'Invia di nuovo' : 'Invia il mese'}
             </button>
           )}
         </div>
       </div>
+
+      {/* Comandi: l'invio è l'azione principale, le altre stanno in "Altro". */}
+      {dati && !selezione && (
+        <div className="comandi-mese">
+          {solaLettura ? (
+            <button type="button" className="neutro" onClick={() => scaricaExcel()} disabled={scaricando}>
+              Scarica Excel
+            </button>
+          ) : (
+            <>
+              <button type="button" className="invia" onClick={apriInvio}>
+                {dati.invii.length ? 'Invia di nuovo' : 'Invia il mese'}
+              </button>
+              <button type="button" className="neutro altro" onClick={() => setMenu(true)} aria-haspopup="dialog">
+                Altro
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      {scaricando && (
+        <p className="conferma riquadro" role="status">
+          Preparo il file Excel…
+        </p>
+      )}
 
       {errore && (
         <p className="errore riquadro" role="alert">
@@ -322,6 +334,8 @@ export default function Mese({ attivita, mie }) {
 
       {selezione && dati && !solaLettura && (
         <div className="barra-selezione" role="toolbar" aria-label="Giorni selezionati">
+          {/* Indietro esce dalla selezione. */}
+          <ChiusuraIndietro onChiudi={() => setSelezione(null)} />
           <span>
             <b>{selezione.size}</b> {selezione.size === 1 ? 'giorno' : 'giorni'}
           </span>
@@ -339,6 +353,39 @@ export default function Mese({ attivita, mie }) {
             Fine
           </button>
         </div>
+      )}
+
+      {menu && dati && (
+        <Foglio titolo={`Altre azioni · ${maiuscola(nomeMese)}`} onChiudi={() => setMenu(false)}>
+          <ul className="menu-azioni">
+            <li>
+              <button type="button" onClick={dalMenu(() => scaricaExcel())} disabled={scaricando}>
+                <b>Scarica Excel</b>
+                <small>Il file del mese, come lo riceverà la segreteria</small>
+              </button>
+            </li>
+            <li>
+              <button type="button" onClick={dalMenu(apriPrecompilazione)}>
+                <b>Precompila il mese</b>
+                <small>Riempie i giorni vuoti con il tuo orario tipo</small>
+              </button>
+            </li>
+            {dati.precompilazione_annullabile > 0 && (
+              <li>
+                <button type="button" onClick={dalMenu(apriAnnullamento)}>
+                  <b>Annulla precompilazione</b>
+                  <small>Toglie quello che l&apos;ultima precompilazione ha inserito e non hai modificato</small>
+                </button>
+              </li>
+            )}
+            <li>
+              <button type="button" onClick={dalMenu(() => setSelezione(new Set()))}>
+                <b>Seleziona giorni</b>
+                <small>Per svuotare più giorni in una volta</small>
+              </button>
+            </li>
+          </ul>
+        </Foglio>
       )}
 
       {svuotamento && (

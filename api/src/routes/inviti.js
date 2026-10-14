@@ -25,13 +25,16 @@ function rotteInviti({ pool, config }) {
     }),
   );
 
-  const nonValido = () => new ErroreHttp(404, "Il link non è valido. Chiedi un nuovo link all'amministratore.");
+  // Un nuovo link si chiede da "Password dimenticata?" nella pagina di accesso
+  // oppure all'amministratore (Gestione → Utenti).
+  const NUOVO_LINK = "Chiedine uno nuovo con «Password dimenticata?» nella pagina di accesso, oppure all'amministratore.";
+  const nonValido = () => new ErroreHttp(404, `Il link non è valido. ${NUOVO_LINK}`);
 
   // Invito ancora utilizzabile, altrimenti lancia l'errore adatto.
   async function leggiInvito(db, codice, perAggiornare = false) {
     if (!CODICE.test(codice ?? '')) throw nonValido();
     const { rows } = await db.query(
-      `SELECT i.id, i.user_id, i.organization_id, i.used_at, i.expires_at <= now() AS scaduto,
+      `SELECT i.id, i.user_id, i.organization_id, i.used_at, i.expires_at <= now() AS scaduto, i.origin,
               u.first_name, u.last_name, u.email, u.active, u.password_hash IS NOT NULL AS ha_password,
               o.name AS org_name
          FROM user_invites i
@@ -44,9 +47,9 @@ function rotteInviti({ pool, config }) {
     const invito = rows[0];
     if (!invito || !invito.active) throw nonValido();
     if (invito.used_at) {
-      throw new ErroreHttp(410, "Questo link è già stato usato. Se non ricordi la password, chiedi un nuovo link all'amministratore.");
+      throw new ErroreHttp(410, `Questo link è già stato usato. Se non ricordi la password: ${NUOVO_LINK.charAt(0).toLowerCase()}${NUOVO_LINK.slice(1)}`);
     }
-    if (invito.scaduto) throw new ErroreHttp(410, "Questo link è scaduto. Chiedi un nuovo link all'amministratore.");
+    if (invito.scaduto) throw new ErroreHttp(410, `Questo link è scaduto. ${NUOVO_LINK}`);
     return invito;
   }
 
@@ -89,6 +92,7 @@ function rotteInviti({ pool, config }) {
         azione: i.ha_password ? 'utente.password_reimpostata' : 'utente.attivato',
         tipo: 'utente',
         id: i.user_id,
+        dettagli: { origine: i.origin },
       });
       // Nuova password: le sessioni aperte con quella vecchia si chiudono.
       await client.query('DELETE FROM user_sessions WHERE user_id = $1', [i.user_id]);

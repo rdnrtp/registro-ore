@@ -64,6 +64,7 @@ export const api = {
   logout: () => chiama('/auth/logout', { method: 'POST' }),
   esciOvunque: () => chiama('/auth/esci-ovunque', { method: 'POST' }),
   io: () => chiama('/auth/me'),
+  passwordDimenticata: (email) => chiama('/auth/password-dimenticata', json('POST', { email })),
 
   attivita: () => chiama('/attivita'),
   mieAttivita: () => chiama('/mie-attivita'),

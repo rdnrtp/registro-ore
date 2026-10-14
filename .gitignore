@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Schermate e tracce delle prove nel browser (e2e)
+e2e/risultati/
 
 # Dati reali di BV: il modello contiene indirizzi email reali
 modello/

@@ -5,6 +5,7 @@ import { dataOra } from './GestioneUtenti.jsx';
 import Foglio from './Foglio.jsx';
 import SedutePt from './SedutePt.jsx';
 import StatoInvio from './StatoInvio.jsx';
+import { naviga } from './navigazione.js';
 import { ElencoGiorni, NavigazioneMese, TotaliMese, salvaFile, usaRiepilogo } from './VistaMese.jsx';
 
 // Mese di un altro utente in sola lettura. Il responsabile vede solo le righe
@@ -44,7 +45,7 @@ export default function MeseCollaboratore({ id, anno, mese, attivita, utente }) 
   const nomeMese = `${NOMI_MESI[mese - 1]} ${anno}`;
   const vai = (delta) => {
     const m = meseVicino(anno, mese, delta);
-    window.location.hash = `#/collaboratori/${id}/${m.anno}/${m.mese}`;
+    naviga(`#/collaboratori/${id}/${m.anno}/${m.mese}`);
   };
   const persona = dati ? `${dati.utente.nome} ${dati.utente.cognome}` : '';
 
@@ -101,30 +102,43 @@ export default function MeseCollaboratore({ id, anno, mese, attivita, utente }) 
           ‹ Tutti i collaboratori
         </a>
         <NavigazioneMese titolo={maiuscola(nomeMese)} onPrecedente={() => vai(-1)} onSuccessivo={() => vai(1)} />
-        {dati && (
-          <div className="azioni-mese">
-            <span className="riassunto">
-              <b>{persona}</b> · {numero(totali.ore)} ore
-              {totali.sedute > 0 && ` · ${numero(totali.sedute)} sedute`}
-            </span>
-            {admin && (
-              <button type="button" className="piccolo" onClick={scaricaExcel} disabled={scaricando}>
-                {scaricando ? 'Preparo il file…' : 'Scarica Excel'}
-              </button>
+        <div className="totale-mese">
+          <p className="riassunto">
+            {dati ? (
+              <>
+                <span className="persona-mese">{persona}</span>
+                <span className="ore-mese">
+                  <b>{numero(totali.ore)}</b> ore
+                </span>
+                {totali.sedute > 0 && (
+                  <span className="sedute-mese">
+                    <b>{numero(totali.sedute)}</b> sedute
+                  </span>
+                )}
+              </>
+            ) : (
+              <>&nbsp;</>
             )}
-            {admin && dati.stato === 'inviato' && (
-              <button type="button" className="piccolo neutro" onClick={() => setRiapertura('')} disabled={attesa}>
-                Riapri il mese
-              </button>
-            )}
-            {admin && dati.stato !== 'inviato' && dati.utente.attivo && !dati.utente.esonerato && (
-              <button type="button" className="piccolo neutro" onClick={sollecita} disabled={attesa}>
-                Sollecita
-              </button>
-            )}
-          </div>
-        )}
+          </p>
+        </div>
       </div>
+      {dati && admin && (
+        <div className="comandi-mese">
+          <button type="button" className="neutro" onClick={scaricaExcel} disabled={scaricando}>
+            {scaricando ? 'Preparo il file…' : 'Scarica Excel'}
+          </button>
+          {dati.stato === 'inviato' && (
+            <button type="button" className="neutro" onClick={() => setRiapertura('')} disabled={attesa}>
+              Riapri il mese
+            </button>
+          )}
+          {dati.stato !== 'inviato' && dati.utente.attivo && !dati.utente.esonerato && (
+            <button type="button" className="neutro" onClick={sollecita} disabled={attesa}>
+              Sollecita
+            </button>
+          )}
+        </div>
+      )}
 
       {errore && (
         <p className="errore riquadro" role="alert">

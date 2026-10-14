@@ -90,7 +90,7 @@ button:disabled {
 }
 
 button.secondario {
-  min-height: 40px;
+  min-height: 44px;
   background: transparent;
   color: #fff;
   border: 1px solid rgb(255 255 255 / 0.7);
@@ -199,7 +199,7 @@ button.neutro {
 }
 
 button.piccolo {
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 14px;
   font-size: 0.9rem;
 }
@@ -278,15 +278,101 @@ button.freccia {
   color: var(--colore-principale);
 }
 
-.azioni-mese {
+/* Riga sotto il titolo del mese: totale (o riepilogo) ben leggibile, al
+   centro, ed eventuale comando breve ("Oggi", filtro). */
+.totale-mese {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 4px 12px;
+  min-height: 44px;
 }
 
 .riassunto {
-  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px 10px;
+  margin: 0;
+  color: var(--colore-secondario);
+  text-align: center;
+}
+
+.ore-mese b,
+.sedute-mese b {
+  font-size: 1.4rem;
+  color: var(--colore-testo);
+}
+
+.sedute-mese b {
+  font-size: 1.15rem;
+}
+
+.persona-mese {
+  font-weight: 700;
+  color: var(--colore-testo);
+}
+
+button.oggi {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--colore-principale);
+  border: 1px solid var(--colore-principale);
+  font-size: 0.9rem;
+}
+
+/* Comandi del mese: pulsanti alti uguali sulla stessa riga. Il primo (Invia)
+   prende lo spazio, "Altro" quello che gli serve. */
+.comandi-mese {
+  display: flex;
+  gap: 8px;
+  padding: 12px 12px 0;
+}
+
+.comandi-mese button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 12px;
+}
+
+.comandi-mese button.altro {
+  flex: 0 0 auto;
+  min-width: 96px;
+}
+
+/* Pannello "Altro": una riga per azione, con la spiegazione sotto. */
+.menu-azioni {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.menu-azioni li + li {
+  margin-top: 8px;
+}
+
+.menu-azioni button {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--colore-bordo);
+  border-radius: 10px;
+  background: var(--colore-scheda);
+  color: var(--colore-testo);
+  text-align: left;
+}
+
+.menu-azioni small {
+  font-weight: 400;
   color: var(--colore-secondario);
 }
 
@@ -755,13 +841,11 @@ a.indietro {
 }
 
 .testata-mese a.indietro {
-  min-height: 0;
+  display: inline-flex;
+  align-items: center;
   padding: 0;
 }
 
-.testata-mese .riassunto {
-  margin: 4px 0 0;
-}
 
 /* Elenchi di persone, settori, attività: righe da toccare. */
 .elenco-persone,
@@ -1199,7 +1283,7 @@ button.scarica-versione {
 .elenco-persone.quadro button.sollecita {
   flex: 0 0 auto;
   width: auto;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 12px;
   border-radius: 999px;
   border: 1px solid var(--colore-principale);
@@ -1438,7 +1522,7 @@ button.svuota-giorno {
 /* Filtri delle email: piccoli, su una riga quando ci stanno. */
 .filtri button {
   flex: 1 1 auto;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 10px;
   font-size: 0.9rem;
 }
@@ -1517,9 +1601,57 @@ button.svuota-giorno {
 }
 
 .link-privacy {
-  display: block;
-  margin: 16px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin: 8px auto;
   text-align: center;
   font-size: 0.85rem;
   color: var(--colore-secondario);
+}
+
+/* ------------------------------------------- Dopo la messa online */
+
+/* Pagina di accesso: "Password dimenticata?" */
+a.link-secondario {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  font-weight: 600;
+}
+
+/* Nuova versione dell'app mentre si stava facendo qualcosa. */
+.avviso-aggiornamento {
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  top: max(8px, env(safe-area-inset-top));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 624px;
+  margin: 0 auto;
+  padding: 8px 8px 8px 14px;
+  border-radius: 10px;
+  background: var(--colore-testo);
+  color: #fff;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+}
+
+.avviso-aggiornamento span {
+  flex: 1;
+}
+
+.totale-mese .riassunto .etichetta {
+  margin-left: 0;
+}
+
+/* Collegamenti di testo da soli su una riga: area di tocco di 44 px. */
+.contenuto > p > a:only-child {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }

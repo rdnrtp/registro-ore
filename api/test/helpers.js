@@ -18,6 +18,7 @@ const configTest = {
   cookieSecure: false,
   trustProxy: 0,
   login: { finestraMinuti: 15, maxFallitiPerEmail: 5, maxFallitiPerIp: 30 },
+  reimpostazione: { durataMinuti: 60, finestraMinuti: 60, maxPerEmail: 3, maxPerIp: 10 },
   appUrl: 'http://app.test',
   posta: { host: null, porta: 25, sicura: false, mittente: 'registro@app.test', intervalloSecondi: 1, maxTentativi: 3 },
   promemoriaIntervalloSecondi: 60,
