@@ -25,6 +25,15 @@ function intero(env, nome, predefinito) {
 const SEGNAPOSTO = /SOSTITUISCI|cambia-questa|esempio\.it|example\.(com|org|net|it)/i;
 const EMAIL = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 
+// Chiavi VAPID delle notifiche push (base64url): la pubblica è un punto
+// P-256 non compresso (65 byte, inizia con 0x04), la privata 32 byte.
+const base64url = (v) => (/^[A-Za-z0-9_-]+$/.test(v) ? Buffer.from(v, 'base64url') : Buffer.alloc(0));
+const chiavePubblicaValida = (v) => {
+  const b = base64url(v);
+  return b.length === 65 && b[0] === 4;
+};
+const chiavePrivataValida = (v) => base64url(v).length === 32;
+
 // Variabili necessarie in produzione, con un controllo in più (facoltativo).
 // Restituisce l'elenco dei problemi: mai i valori, che possono essere segreti.
 function controllaProduzione(env) {
@@ -42,6 +51,8 @@ function controllaProduzione(env) {
     SMTP_PASSWORD: null,
     POSTA_MITTENTE: (v) => (EMAIL.test(v) && !v.endsWith('@localhost')) || 'deve essere un indirizzo email del dominio di invio',
     ALLARMI_EMAIL: (v) => EMAIL.test(v) || 'deve essere un indirizzo email',
+    VAPID_PUBLIC_KEY: (v) => chiavePubblicaValida(v) || 'non è una chiave pubblica VAPID (vedi RUNBOOK.md, notifiche push)',
+    VAPID_PRIVATE_KEY: (v) => chiavePrivataValida(v) || 'non è una chiave privata VAPID (vedi RUNBOOK.md, notifiche push)',
   };
   for (const [nome, controllo] of Object.entries(regole)) {
     const valore = env[nome]?.trim();
@@ -55,6 +66,25 @@ function controllaProduzione(env) {
     }
   }
   return problemi;
+}
+
+// Notifiche push: senza le due chiavi VAPID sono spente (sviluppo) e tutte
+// le notifiche vanno per email. In produzione sono obbligatorie.
+function configPush(env) {
+  const pubblica = env.VAPID_PUBLIC_KEY?.trim();
+  const privata = env.VAPID_PRIVATE_KEY?.trim();
+  if (!pubblica && !privata) return null;
+  if (!chiavePubblicaValida(pubblica ?? '') || !chiavePrivataValida(privata ?? '')) {
+    throw new Error('VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY: chiavi mancanti o non valide');
+  }
+  return {
+    chiavePubblica: pubblica,
+    chiavePrivata: privata,
+    // Contatto per i servizi push (Google, Apple, …) in caso di problemi.
+    soggetto: env.ALLARMI_EMAIL ? `mailto:${env.ALLARMI_EMAIL}` : (env.APP_URL || 'http://localhost:8088').replace(/\/+$/, ''),
+    intervalloSecondi: intero(env, 'PUSH_INTERVALLO_SECONDI', 5),
+    maxTentativi: intero(env, 'PUSH_MAX_TENTATIVI', 6),
+  };
 }
 
 function caricaConfig(env = process.env) {
@@ -115,6 +145,7 @@ function caricaConfig(env = process.env) {
     },
     // Chi riceve gli avvisi tecnici (backup fallito): comando avviso-sistema.
     allarmiEmail: env.ALLARMI_EMAIL || null,
+    push: configPush(env),
     // Ogni quanti secondi si controlla se è ora di mandare i promemoria.
     promemoriaIntervalloSecondi: intero(env, 'PROMEMORIA_INTERVALLO_SECONDI', 60),
   };

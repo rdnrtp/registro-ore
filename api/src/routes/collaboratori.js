@@ -4,7 +4,7 @@ const { transazione } = require('../db');
 const { ErroreHttp } = require('../errori');
 const { isUuid, leggiAnnoMese, NOMI_MESI } = require('../validazione');
 const { traccia } = require('../traccia');
-const { notifica, NOME_APP } = require('../notifiche');
+const { notifica, linkMese, NOME_APP } = require('../notifiche');
 const { elencoInvii } = require('../invio-mese');
 const { fileExcelMese, fileInviato, inviaFile } = require('./esportazione');
 
@@ -238,13 +238,15 @@ function rotteCollaboratori({ pool, config }) {
       await notifica(client, config, {
         organizzazioneId: org,
         utenti: [u.id],
+        autore: req.utente.id,
         tipo: 'riapertura',
         titolo: `Il tuo mese di ${quale} è stato riaperto`,
         testo:
           `${admin.rows[0].first_name} ${admin.rows[0].last_name} ha riaperto il mese di ${quale} per una correzione.\n` +
           `Motivazione: ${motivazione}\n\n` +
           'Correggi le registrazioni e invia di nuovo il mese dall\'app: la nuova email sostituirà quella precedente.',
-        link: `#/`,
+        breve: `Motivazione: ${motivazione.length > 200 ? `${motivazione.slice(0, 199)}…` : motivazione}`,
+        link: linkMese(anno, mese),
       });
     });
     res.json({ stato: 'aperto', invii: await elencoInvii(pool, { orgId: org, utenteId: req.params.id, anno, mese }) });
@@ -278,12 +280,13 @@ function rotteCollaboratori({ pool, config }) {
       await notifica(client, config, {
         organizzazioneId: org,
         utenti: [u.id],
+        autore: req.utente.id,
         tipo: 'sollecito',
         titolo: `Promemoria: invia le ore di ${quale}`,
         testo:
           `${mittente} ti ricorda che non hai ancora inviato il file delle ore di ${quale}. ` +
           'Controlla le registrazioni e invialo dall\'app con il pulsante "Invia il mese".',
-        link: `#/`,
+        link: linkMese(anno, mese),
         chiave: `${chiave}${Date.now()}`,
         nomeMittente: `${mittente} tramite ${NOME_APP}`,
         rispondiA: io[0].email,

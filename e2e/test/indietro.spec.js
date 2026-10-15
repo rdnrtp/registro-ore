@@ -153,3 +153,57 @@ test('il pannello "Esci" si chiude con Indietro', async ({ page }) => {
   await expect(finestra(page)).toHaveCount(0);
   await esce(page);
 });
+
+// Tocco su una notifica push con l'app già aperta: il service worker manda
+// alla pagina il messaggio { tipo: 'apri', link } (public/sw.js); qui lo si
+// simula direttamente.
+const toccoNotifica = (page, link) =>
+  page.evaluate((l) => navigator.serviceWorker.dispatchEvent(new MessageEvent('message', { data: { tipo: 'apri', link: l } })), link);
+
+test('tocco su una notifica con l\'app aperta: va all\'avviso, Indietro risale fino al Mese', async ({ page }) => {
+  await apri(page);
+  await toccoNotifica(page, `#/bacheca/${AVVISO}`);
+  await expect(finestra(page)).toContainText('Sabato 24 ottobre');
+  await indietro(page);
+  await expect(page).toHaveURL(/#\/bacheca$/);
+  await indietro(page);
+  await suMese(page);
+  await esce(page);
+});
+
+test('tocco su una notifica con una finestra aperta: la finestra si chiude e Indietro funziona', async ({ page }) => {
+  await apri(page);
+  await page.locator('ol.giorni button').nth(13).click();
+  await expect(finestra(page)).toBeVisible();
+  await toccoNotifica(page, `#/bacheca/${AVVISO}`);
+  await expect(finestra(page)).toContainText('Sabato 24 ottobre');
+  await indietro(page);
+  await expect(page).toHaveURL(/#\/bacheca$/);
+  await indietro(page);
+  await suMese(page);
+  await esce(page);
+});
+
+test('notifica di un mese riaperto (app chiusa): si apre su quel mese, Indietro torna al mese corrente', async ({ page }) => {
+  await apri(page, '/#/mese/2026/9');
+  await expect(page.getByRole('heading', { level: 1, name: 'Settembre 2026' })).toBeVisible();
+  await indietro(page);
+  await suMese(page);
+  await esce(page);
+});
+
+test('un messaggio con un indirizzo esterno viene ignorato', async ({ page }) => {
+  await apri(page);
+  await toccoNotifica(page, 'https://sito-estraneo.test/');
+  await page.waitForTimeout(200);
+  await suMese(page);
+});
+
+test('Notifiche (barra in alto): Indietro torna al Mese, poi esce', async ({ page }) => {
+  await apri(page);
+  await page.getByRole('link', { name: 'Notifiche' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Notifiche' })).toBeVisible();
+  await indietro(page);
+  await suMese(page);
+  await esce(page);
+});

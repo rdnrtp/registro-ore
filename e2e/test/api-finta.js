@@ -9,6 +9,8 @@ const ID = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const IO = ID(1);
 const COLLEGA = ID(2);
 const AVVISO = ID(50);
+// Chiave pubblica VAPID di esempio (punto P-256 non compresso, 65 byte).
+const CHIAVE_PUSH = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
 
 const SETTORI = [
   { id: ID(101), nome: 'Segreteria', ordine: 1, email_responsabili: ['segreteria@bv.test'], responsabili: [] },
@@ -74,7 +76,7 @@ function mese(stato = 'aperto') {
 }
 
 const UTENTI = [
-  { id: IO, nome: 'Andrea', cognome: 'Petris', email: 'andrea@bv.test', ruolo: 'amministratore', attivo: true, esonerato_invio: false, password_impostata: true, invito_scadenza: null, settori: [] },
+  { id: IO, nome: 'Andrea', cognome: 'Petris', email: 'andrea@bv.test', ruolo: 'amministratore', attivo: true, esonerato_invio: false, password_impostata: true, invito_scadenza: null, settori: [], dispositivi_push: 1 },
   { id: COLLEGA, nome: 'Maria', cognome: 'Rossi', email: 'maria@bv.test', ruolo: 'collaboratore', attivo: true, esonerato_invio: false, password_impostata: true, invito_scadenza: null, settori: [] },
   { id: ID(3), nome: 'Luca', cognome: 'Bianchi', email: 'luca@bv.test', ruolo: 'responsabile', attivo: true, esonerato_invio: false, password_impostata: false, invito_scadenza: '2026-10-16T10:00:00Z', settori: [ID(102)] },
 ];
@@ -97,13 +99,14 @@ const collaboratore = (u, ore, extra) => ({
   ...extra,
 });
 
-// opzioni: { ruolo, autenticato, statoMese }. Restituisce lo stato della
+// opzioni: { ruolo, autenticato, statoMese, dispositiviPush }. Restituisce lo stato della
 // simulazione (es. chiamate a password-dimenticata) per i controlli.
 async function apiFinta(page, opzioni = {}) {
   const s = {
     ruolo: opzioni.ruolo ?? 'amministratore',
     autenticato: opzioni.autenticato ?? true,
     statoMese: opzioni.statoMese ?? 'aperto',
+    dispositiviPush: opzioni.dispositiviPush ?? 0,
     richiesteReset: [],
   };
   await page.clock.setFixedTime(ADESSO);
@@ -129,6 +132,7 @@ async function apiFinta(page, opzioni = {}) {
     }
     if (!s.autenticato) return json({ errore: 'Accesso richiesto' }, 401);
 
+    if (percorso.startsWith('/push/') && metodo !== 'GET') return json({ dispositivi: s.dispositiviPush });
     if (metodo !== 'GET') return json({ ok: true });
 
     const m = (re) => re.exec(percorso);
@@ -164,6 +168,7 @@ async function apiFinta(page, opzioni = {}) {
         sostituisce: null,
       });
     }
+    if (percorso === '/push') return json({ chiave_pubblica: CHIAVE_PUSH, dispositivi: s.dispositiviPush });
     if (percorso === '/avvisi/non-letti') return json({ non_letti: 1, importanti: 0 });
     if (percorso === '/avvisi') {
       return json({

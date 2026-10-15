@@ -10,7 +10,7 @@
 // - Server spento alle 9: il giro parte appena l'API riparte, se è ancora
 //   lo stesso giorno. I giorni passati non vengono recuperati.
 const { transazione } = require('./db');
-const { notifica } = require('./notifiche');
+const { notifica, linkMese } = require('./notifiche');
 const { inItalia } = require('./tempo');
 const { giorniNelMese, NOMI_MESI } = require('./validazione');
 
@@ -22,17 +22,18 @@ function giorniPromemoria(conf, anno, mese) {
   return [...giorni].sort((a, b) => a - b);
 }
 
+function scadenza(anno, mese, giorno) {
+  const ultimo = giorniNelMese(anno, mese);
+  return giorno === ultimo ? `Oggi è l'ultimo giorno per inviarlo.` : `La scadenza è il ${ultimo} ${NOMI_MESI[mese - 1]}.`;
+}
+
 function testo(anno, mese, giorno) {
   const quale = `${NOMI_MESI[mese - 1]} ${anno}`;
   const ultimo = giorniNelMese(anno, mese);
-  const scadenza =
-    giorno === ultimo
-      ? `Oggi è l'ultimo giorno per inviarlo.`
-      : `La scadenza è il ${ultimo} ${NOMI_MESI[mese - 1]}.`;
   return {
     titolo: giorno === ultimo ? `Ultimo giorno: invia le ore di ${quale}` : `Ricordati di inviare le ore di ${quale}`,
     testo:
-      `non hai ancora inviato il file delle ore di ${quale}. ${scadenza} ` +
+      `non hai ancora inviato il file delle ore di ${quale}. ${scadenza(anno, mese, giorno)} ` +
       'Se un file arriva in ritardo, slittano gli stipendi di tutti.\n\n' +
       'Controlla le registrazioni e usa il pulsante "Invia il mese" nell\'app.',
   };
@@ -92,7 +93,9 @@ async function eseguiPromemoria(pool, config, { adesso = new Date(), simulazione
         tipo: 'promemoria',
         titolo,
         testo: corpo,
-        link: '#/',
+        breve: scadenza(oggi.anno, oggi.mese, oggi.giorno),
+        link: linkMese(oggi.anno, oggi.mese),
+        adesso,
         chiave: `promemoria:${oggi.data}${simulazione ? ':simulazione' : ''}`,
       });
       await client.query(

@@ -25,6 +25,8 @@ const PAGINE = [
   ['mese-precedente', '/', {}, (page) => page.getByRole('button', { name: 'Mese precedente' }).click()],
   ['mese-inviato', '/', { statoMese: 'inviato' }],
   ['bacheca', '/#/bacheca'],
+  ['notifiche', '/#/notifiche'],
+  ['notifiche-due-dispositivi', '/#/notifiche', { dispositiviPush: 2 }],
   ['attivita', '/#/attivita'],
   ['orario', '/#/orario'],
   ['collaboratori', '/#/collaboratori/2026/10'],

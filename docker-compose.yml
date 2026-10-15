@@ -56,6 +56,10 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       POSTA_MITTENTE: ${POSTA_MITTENTE:-registro-ore@localhost}
       POSTA_MAX_TENTATIVI: ${POSTA_MAX_TENTATIVI:-8}
+      # Notifiche push: senza chiavi sono spente e tutto va per email. Dal
+      # telefono servono comunque HTTPS (non http://<IP del PC>).
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
     volumes:
       # Dati privati dell'impianto (fuori da git), letti dai comandi di caricamento.
       - ./modello:/dati/modello:ro

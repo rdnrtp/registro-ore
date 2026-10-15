@@ -239,9 +239,11 @@ function rotteBacheca({ pool, config }) {
       await notifica(client, config, {
         organizzazioneId: org,
         utenti: destinatari.map((d) => d.id),
+        autore: req.utente.id,
         tipo: 'avviso',
         titolo: `${importante ? 'Avviso importante' : 'Nuovo avviso'}: ${titolo}`,
         testo: `in bacheca c'è un nuovo avviso${importante ? ' importante' : ''} per te: «${titolo}».\nAprilo nell'app per leggerlo.`,
+        breve: 'Tocca per leggerlo in bacheca.',
         link: `#/bacheca/${avviso}`,
         chiave: `avviso:${avviso}`,
         nomeMittente: `${io[0].first_name} ${io[0].last_name} tramite ${NOME_APP}`,

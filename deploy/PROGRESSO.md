@@ -36,7 +36,7 @@ indirizzi reali: `RUNBOOK.md` 11.1 e 11.2.
 - [x] 5. Deploy key in sola lettura, impronta GitHub verificata, clone.
 - [x] 6.1 `genera-segreti.sh`; 6.2 valori non segreti scritti da Claude con
   `sed`, segreti SMTP/B2 da Andrea con nano; 6.3 chiave dei backup creata da
-  Andrea (privata nel gestore di password e su carta); 6.4 copia di
+  Andrea (privata nel gestore di password e su carta); 6.4 (oggi 6.5) copia di
   `.env.production` nel gestore di password.
 - [x] 7. Modello copiato (sha256 `46a86441…`), `contatti.json` di prova,
   avvio (4 servizi healthy), migrazioni 001–010, BV caricata (8 settori, 30
@@ -77,6 +77,19 @@ Message-ID.
 Rilascio minimo per la prova dell'aggiornamento: l'app installata, lasciata
 aperta in sottofondo, al ritorno in primo piano si è ricaricata da sola con
 la versione nuova.
+
+## Fase 6b: notifiche push (sviluppata il 15/10/2026)
+
+Push per avvisi, promemoria e riaperture (vedi CLAUDE.md, "Notifiche push").
+Rilascio: prima le chiavi VAPID in `.env.production` (RUNBOOK 6.4, poi
+copia nel gestore di password), poi `rilascia.sh` (migrazione 012).
+
+- [ ] Chiavi VAPID create sul server e copia di `.env.production` aggiornata.
+- [ ] Rilascio con `rilascia.sh`, migrazione 012.
+- [ ] Prove dal telefono Android: attivazione, notifica di prova, avviso
+  ricevuto da Prova Uno (riattivato), fascia di silenzio, tocco sulla
+  notifica, Indietro dopo il tocco.
+- [ ] Prova Uno di nuovo disattivato dopo le prove (se non serve più).
 
 ## Da fare
 

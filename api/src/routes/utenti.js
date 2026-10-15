@@ -25,7 +25,10 @@ function rotteUtenti({ pool, config }) {
                       WHERE m.user_id = u.id AND m.organization_id = u.organization_id), '{}') AS settori,
            (SELECT max(i.expires_at) FROM user_invites i
              WHERE i.user_id = u.id AND i.organization_id = u.organization_id
-               AND i.used_at IS NULL AND i.expires_at > now()) AS invito_scadenza
+               AND i.used_at IS NULL AND i.expires_at > now()) AS invito_scadenza,
+           -- Dispositivi con le notifiche push attive (per sapere chi le riceve).
+           (SELECT count(*) FROM push_subscriptions p
+             WHERE p.user_id = u.id AND p.organization_id = u.organization_id)::int AS dispositivi_push
       FROM users u WHERE u.organization_id = $1`;
 
   async function leggiUtente(db, orgId, id) {

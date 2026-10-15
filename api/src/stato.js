@@ -4,13 +4,15 @@
 // - database: risponde a una query;
 // - posta: nessuna email in attesa da più di 30 minuti (normalmente partono
 //   in pochi secondi: oltre, il server di posta rifiuta o non risponde);
-// - lavori: ogni lavoro in sottofondo (coda email, promemoria) ha concluso un
+// - push: nessuna notifica push che doveva partire da più di 30 minuti
+//   (quelle rinviate alle 7 per la fascia di silenzio non contano);
+// - lavori: ogni lavoro in sottofondo (coda email e push, promemoria) ha concluso un
 //   giro negli ultimi 5 minuti.
 const POSTA_RITARDO_MINUTI = 30;
 const LAVORI_FERMI_MINUTI = 5;
 
 async function statoApp(pool, ultimiGiri, adesso = Date.now()) {
-  const stato = { database: 'ok', posta: 'ok', lavori: 'ok' };
+  const stato = { database: 'ok', posta: 'ok', push: 'ok', lavori: 'ok' };
   try {
     const { rows } = await pool.query(
       `SELECT count(*)::int AS ferme FROM email_outbox
@@ -18,9 +20,16 @@ async function statoApp(pool, ultimiGiri, adesso = Date.now()) {
       [POSTA_RITARDO_MINUTI],
     );
     if (rows[0].ferme > 0) stato.posta = 'in ritardo';
+    const push = await pool.query(
+      `SELECT count(*)::int AS ferme FROM push_outbox
+        WHERE status = 'in_attesa' AND next_attempt_at < now() - make_interval(mins => $1)`,
+      [POSTA_RITARDO_MINUTI],
+    );
+    if (push.rows[0].ferme > 0) stato.push = 'in ritardo';
   } catch {
     stato.database = 'errore';
     stato.posta = 'sconosciuto';
+    stato.push = 'sconosciuto';
   }
   for (const ultimo of ultimiGiri.values()) {
     if (adesso - ultimo > LAVORI_FERMI_MINUTI * 60 * 1000) stato.lavori = 'fermi';

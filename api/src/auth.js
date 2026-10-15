@@ -91,7 +91,8 @@ function autenticato(pool, config) {
       cancellaCookie(res, config);
       return res.status(401).json({ errore: 'Sessione non valida o scaduta' });
     }
-    req.utente = Object.freeze({ id: dati.sub, organizzazioneId: dati.org, ruolo: rows[0].role });
+    // sessioneId: solo per legare a questo accesso le notifiche push del dispositivo.
+    req.utente = Object.freeze({ id: dati.sub, organizzazioneId: dati.org, ruolo: rows[0].role, sessioneId: dati.sid });
     next();
   };
 }

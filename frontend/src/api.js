@@ -88,6 +88,12 @@ export const api = {
   avviso: (id) => chiama(`/avvisi/${id}`),
   segnaLetto: (id) => chiama(`/avvisi/${id}/letto`, json('POST')),
 
+  // Notifiche push di questo dispositivo
+  statoPush: () => chiama('/push'),
+  iscriviPush: (iscrizione) => chiama('/push/iscrizioni', json('POST', iscrizione)),
+  disiscriviPush: (endpoint) => chiama('/push/iscrizioni', json('DELETE', { endpoint })),
+  provaPush: () => chiama('/push/prova', json('POST')),
+
   orarioTipo: () => chiama('/orario-tipo'),
   salvaOrarioTipo: (voci) => chiama('/orario-tipo', json('PUT', { voci })),
 

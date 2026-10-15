@@ -5,6 +5,12 @@ const { caricaConfig, controllaProduzione } = require('../src/config');
 const { statoApp } = require('../src/stato');
 const { PASSWORD, configTest, preparaAmbiente, nuovaApp } = require('./helpers');
 
+// Chiavi VAPID come le crea deploy/genera-chiavi-push.sh.
+const { privateKey, publicKey } = require('node:crypto').generateKeyPairSync('ec', { namedCurve: 'P-256' });
+const jwk = publicKey.export({ format: 'jwk' });
+const VAPID_PUBLIC_KEY = Buffer.concat([Buffer.from([4]), Buffer.from(jwk.x, 'base64url'), Buffer.from(jwk.y, 'base64url')]).toString('base64url');
+const VAPID_PRIVATE_KEY = privateKey.export({ format: 'jwk' }).d;
+
 const ENV_VALIDO = {
   AMBIENTE: 'produzione',
   PGHOST: 'db',
@@ -19,6 +25,8 @@ const ENV_VALIDO = {
   SMTP_PASSWORD: 'password-smtp-lunga',
   POSTA_MITTENTE: 'registro@ore.impianto.it',
   ALLARMI_EMAIL: 'admin@impianto.it',
+  VAPID_PUBLIC_KEY,
+  VAPID_PRIVATE_KEY,
 };
 
 describe('configurazione di produzione', () => {
@@ -28,6 +36,23 @@ describe('configurazione di produzione', () => {
     assert.equal(config.cookieSecure, true);
     assert.equal(config.posta.richiediTls, true);
     assert.equal(config.allarmiEmail, 'admin@impianto.it');
+    assert.equal(config.push.chiavePubblica, VAPID_PUBLIC_KEY);
+    assert.equal(config.push.soggetto, 'mailto:admin@impianto.it');
+  });
+
+  it('senza chiavi VAPID valide non parte, e non mostra la chiave privata', () => {
+    const { VAPID_PUBLIC_KEY: _p, VAPID_PRIVATE_KEY: _q, ...senza } = ENV_VALIDO;
+    assert.deepEqual(controllaProduzione(senza), ['VAPID_PUBLIC_KEY manca', 'VAPID_PRIVATE_KEY manca']);
+    const scambiate = { ...ENV_VALIDO, VAPID_PUBLIC_KEY: VAPID_PRIVATE_KEY, VAPID_PRIVATE_KEY: VAPID_PUBLIC_KEY };
+    assert.throws(() => caricaConfig(scambiate), (err) => {
+      assert.match(err.message, /VAPID_PUBLIC_KEY non è una chiave pubblica VAPID/);
+      assert.match(err.message, /VAPID_PRIVATE_KEY non è una chiave privata VAPID/);
+      assert.ok(!err.message.includes(VAPID_PRIVATE_KEY));
+      return true;
+    });
+    assert.deepEqual(controllaProduzione({ ...ENV_VALIDO, VAPID_PRIVATE_KEY: 'SOSTITUISCI_chiave_privata' }), [
+      'VAPID_PRIVATE_KEY contiene ancora il valore di esempio',
+    ]);
   });
 
   it('elenca ogni variabile mancante, senza mostrare i valori', () => {
@@ -72,6 +97,8 @@ describe('configurazione di produzione', () => {
     const config = caricaConfig({ JWT_SECRET: 'x'.repeat(32) });
     assert.equal(config.produzione, false);
     assert.equal(config.cookieSecure, false);
+    // Senza chiavi VAPID le push sono spente: tutte le notifiche per email.
+    assert.equal(config.push, null);
   });
 });
 
@@ -87,7 +114,7 @@ describe('stato e origine delle richieste', () => {
   it('/api/stato risponde 200 senza dati', async () => {
     const res = await request(app).get('/api/stato');
     assert.equal(res.status, 200);
-    assert.deepEqual(res.body, { ok: true, database: 'ok', posta: 'ok', lavori: 'ok' });
+    assert.deepEqual(res.body, { ok: true, database: 'ok', posta: 'ok', push: 'ok', lavori: 'ok' });
     assert.equal(res.headers['cache-control'], 'no-store');
   });
 

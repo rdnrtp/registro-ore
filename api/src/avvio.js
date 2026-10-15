@@ -1,7 +1,9 @@
-// Lavori in sottofondo dell'API: invio delle email in coda e promemoria.
-// Ogni lavoro gira a intervalli e non si sovrappone a sé stesso.
+// Lavori in sottofondo dell'API: invio delle email e delle push in coda,
+// promemoria. Ogni lavoro gira a intervalli e non si sovrappone a sé stesso.
 const { elaboraCoda } = require('./posta/coda');
 const { creaTrasporto } = require('./posta/trasporto');
+const { elaboraCodaPush } = require('./push/coda');
+const { creaInvioPush } = require('./push/invio');
 const { eseguiPromemoria } = require('./promemoria');
 
 // Ultimo giro concluso di ogni lavoro (anche con errore): lo legge /api/stato
@@ -39,6 +41,16 @@ function avviaLavori(pool, config) {
     );
   } else {
     console.warn('SMTP_HOST non impostato: le email restano in coda e non vengono inviate.');
+  }
+  const invia = creaInvioPush(config.push);
+  if (invia) {
+    fermate.push(
+      ripeti('Coda push', config.push.intervalloSecondi, () =>
+        elaboraCodaPush(pool, { invia, config, log: (m) => console.warn(m) }),
+      ),
+    );
+  } else {
+    console.warn('Chiavi VAPID non impostate: notifiche push spente, tutte le notifiche vanno per email.');
   }
   fermate.push(
     ripeti('Promemoria', config.promemoriaIntervalloSecondi, async () => {

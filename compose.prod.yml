@@ -84,6 +84,9 @@ services:
       POSTA_MITTENTE: ${POSTA_MITTENTE:-}
       POSTA_MAX_TENTATIVI: ${POSTA_MAX_TENTATIVI:-8}
       ALLARMI_EMAIL: ${ALLARMI_EMAIL:-}
+      # Notifiche push (obbligatorie: senza, l'API non parte).
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
     volumes:
       # Modello Excel e configurazione dell'impianto, letti solo da
       # carica-organizzazione (copiati a mano sul server, fuori da git).

@@ -248,6 +248,7 @@ uscire.) Ogni voce è spiegata nel file. Sostituisci ogni valore che contiene
 | `ALLARMI_EMAIL` | «TUA_EMAIL» |
 | `BACKUP_CHIAVE_PUBBLICA` | la scrive lo script del passo 6.3 |
 | `BACKUP_REMOTO` e righe `RCLONE_…` | sezione 9.2 (si può fare dopo) |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | passo 6.4 |
 
 Se una password contiene il carattere `$`, scrivila tra apici singoli:
 `SMTP_PASSWORD='abc$def'`. **Eccezione: le righe `RCLONE_…` vanno scritte
@@ -284,7 +285,46 @@ pubblica in `.env.production`. **Senza la chiave privata i backup non si
 possono aprire, da nessuno.** Chiudi poi la finestra del terminale (la
 chiave potrebbe essere rimasta nello storico dello schermo).
 
-### 6.4 Copia di sicurezza della configurazione
+### 6.4 Chiavi delle notifiche push
+
+Le notifiche sul telefono richiedono una coppia di chiavi ("VAPID"): la
+pubblica la vede ogni browser, la **privata è un segreto** come le
+password. Senza le due chiavi l'API non parte.
+
+```
+server$ cd /opt/registro-ore
+server$ ./deploy/genera-chiavi-push.sh
+```
+
+Stampa due righe, che iniziano con `VAPID_PUBLIC_KEY=` e
+`VAPID_PRIVATE_KEY=` (non scrive nessun file). Poi:
+
+```
+server$ nano .env.production
+```
+
+1. con `Ctrl+W` cerca `VAPID_PUBLIC_KEY` (se non c'è, vai in fondo al file
+   con `Alt+/`);
+2. se ci sono già le righe `VAPID_PUBLIC_KEY=…` e `VAPID_PRIVATE_KEY=…`
+   (con `SOSTITUISCI`), cancellale (`Ctrl+K` cancella la riga del cursore);
+3. seleziona nel terminale le due righe stampate dallo script, copiale e
+   incollale in nano (tasto destro, oppure `Ctrl+Shift+V`), ciascuna su una
+   riga sua, senza spazi né virgolette;
+4. salva con `Ctrl+O` e Invio ("Wrote … lines"), esci con `Ctrl+X`.
+
+Controllo, senza mostrare i valori (deve stampare `VAPID_PUBLIC_KEY 87` e
+`VAPID_PRIVATE_KEY 43`, una riga ciascuna):
+
+```
+server$ grep -E '^VAPID_(PUBLIC|PRIVATE)_KEY=' .env.production | awk -F= '{print $1, length($2)}'
+```
+
+Chiudi poi il terminale (la chiave privata è rimasta sullo schermo) e
+aggiorna la copia nel gestore di password (6.5). **Non rigenerarle** senza
+motivo: con chiavi nuove le notifiche si spengono su tutti i telefoni e
+ognuno deve riattivarle (pagina **Notifiche** dell'app).
+
+### 6.5 Copia di sicurezza della configurazione
 
 ```
 server$ cat .env.production
@@ -522,7 +562,8 @@ salva comunque una copia del database attuale (in
 L'indirizzo `https://«DOMINIO»/api/stato` risponde **200** con
 `{"ok":true,…}` se database, invio delle email e lavori in sottofondo
 funzionano, altrimenti **503** e il nome del controllo fallito
-(`"posta":"in ritardo"` = email ferme da oltre 30 minuti). Non mostra dati.
+(`"posta":"in ritardo"` = email ferme da oltre 30 minuti, `"push":"in
+ritardo"` = notifiche push ferme da oltre 30 minuti). Non mostra dati.
 
 Con un servizio di monitoraggio gratuito (es. UptimeRobot o Better Stack;
 verifica le condizioni d'uso del piano gratuito):
@@ -700,7 +741,21 @@ ricarica da sola quando torna in primo piano (o propone "Aggiorna" se in
 quel momento c'era una finestra aperta). Per controllare quale versione è
 online: `https://«DOMINIO»/versione.json` (data e ora della compilazione).
 
-### 13.1 Se qualcosa va storto: tornare indietro
+### 13.1 Prima volta con le notifiche push (Fase 6b)
+
+La versione con le notifiche push non parte senza le chiavi VAPID: **prima**
+di `rilascia.sh` vanno create e scritte in `.env.production` (passo 6.4),
+poi aggiornata la copia nel gestore di password (6.5). Se le chiavi mancano,
+il rilascio si ferma con "Configurazione di produzione non valida" e
+`./deploy/torna-indietro.sh` rimette la versione precedente.
+
+Come funzionano, in breve: ognuno le attiva dal proprio telefono (pulsante
+**Notifiche** in alto). Chi le ha attive riceve avvisi e promemoria solo come
+notifica, gli altri per email; la riapertura di un mese arriva sempre anche
+per email. Dalle 22 alle 7 nessuna notifica: partono alle 7. In **Gestione →
+Utenti** compare "Notifiche push attive" accanto a chi le ha.
+
+### 13.2 Se qualcosa va storto: tornare indietro
 
 ```
 server$ ./deploy/torna-indietro.sh
@@ -728,7 +783,9 @@ Se il server è perso (guasto, compromesso, cambio di fornitore):
    autorizza il nuovo IP anche nel servizio SMTP (Brevo, sezione 8.1);
 2. passi 4 e 5;
 3. invece del passo 6: `nano /opt/registro-ore/.env.production` e incolla il
-   contenuto salvato nel gestore di password; poi `chmod 600 .env.production`;
+   contenuto salvato nel gestore di password (comprese le chiavi VAPID:
+   tenendo le stesse, le notifiche continuano a funzionare sui telefoni);
+   poi `chmod 600 .env.production`;
 4. copia le chiavi SFTP se le usavi (9.2) e
    `./deploy/compose.sh up -d --build --wait`;
 5. recupera il database:

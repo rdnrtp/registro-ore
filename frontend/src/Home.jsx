@@ -10,6 +10,8 @@ import MeseCollaboratore from './MeseCollaboratore.jsx';
 import Gestione from './Gestione.jsx';
 import Bacheca from './Bacheca.jsx';
 import Foglio from './Foglio.jsx';
+import Notifiche from './Notifiche.jsx';
+import { rinnova } from './push.js';
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -66,6 +68,12 @@ export default function Home({ sessione, onEsci }) {
     return () => clearInterval(timer);
   }, [contaNonLetti]);
 
+  // Push attivate su questo dispositivo: si rinnova l'iscrizione (dopo un
+  // nuovo accesso quella della sessione precedente non c'è più).
+  useEffect(() => {
+    rinnova(utente.id);
+  }, [utente.id]);
+
   useEffect(() => {
     Promise.all([api.attivita(), api.mieAttivita()])
       .then(([tutte, scelte]) => {
@@ -76,7 +84,8 @@ export default function Home({ sessione, onEsci }) {
   }, []);
 
   const elenco = sezioni(utente.ruolo);
-  const sezione = elenco.some((s) => s.chiave === (rotta[0] ?? '')) ? (rotta[0] ?? '') : '';
+  // La pagina Notifiche (dalla barra in alto) non è una sezione della barra in basso.
+  const sezione = rotta[0] === 'notifiche' ? null : elenco.some((s) => s.chiave === (rotta[0] ?? '')) ? (rotta[0] ?? '') : '';
   const etichetta = (s) => (elenco.length > 3 ? s.breve : s.nome);
 
   let contenuto;
@@ -88,6 +97,11 @@ export default function Home({ sessione, onEsci }) {
     );
   } else if (!attivita) {
     contenuto = <p className="caricamento">Caricamento…</p>;
+  } else if (rotta[0] === 'notifiche') {
+    contenuto = <Notifiche utente={utente} />;
+  } else if (rotta[0] === 'mese' && rotta.length === 3) {
+    // Mese indicato (link di notifiche ed email: il mese da inviare o da correggere).
+    contenuto = <Mese key={rotta.join('/')} attivita={attivita} mie={mie} iniziale={annoMese(rotta[1], rotta[2])} />;
   } else if (sezione === 'bacheca') {
     contenuto = <Bacheca aperto={UUID.test(rotta[1] ?? '') ? rotta[1] : null} utente={utente} onLetto={contaNonLetti} />;
   } else if (sezione === 'attivita') {
@@ -125,9 +139,14 @@ export default function Home({ sessione, onEsci }) {
             {utente.ruolo !== 'collaboratore' && ` · ${utente.ruolo}`}
           </small>
         </span>
-        <button type="button" className="secondario" onClick={() => confermaUscita() && setUscita({ attesa: false, errore: '' })}>
-          Esci
-        </button>
+        <span className="comandi-barra">
+          <a className="pulsante-barra" href="#/notifiche" aria-current={rotta[0] === 'notifiche' ? 'page' : undefined}>
+            Notifiche
+          </a>
+          <button type="button" className="secondario" onClick={() => confermaUscita() && setUscita({ attesa: false, errore: '' })}>
+            Esci
+          </button>
+        </span>
       </header>
       <main>
         {contenuto}

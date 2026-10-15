@@ -11,9 +11,11 @@ import { ChiusuraIndietro } from './navigazione.js';
 
 const dalla = (data) => ({ anno: Number(data.slice(0, 4)), mese: Number(data.slice(5, 7)) });
 
-export default function Mese({ attivita, mie }) {
+// iniziale: { anno, mese } da mostrare all'apertura (#/mese/AAAA/M), oppure
+// il mese corrente.
+export default function Mese({ attivita, mie, iniziale }) {
   const oggi = oggiIso();
-  const [periodo, setPeriodo] = useState(() => dalla(oggi));
+  const [periodo, setPeriodo] = useState(() => iniziale ?? dalla(oggi));
   const [dati, setDati] = useState(null);
   const [versione, setVersione] = useState(0);
   const [errore, setErrore] = useState('');

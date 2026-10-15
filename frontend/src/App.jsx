@@ -7,6 +7,7 @@ import Home from './Home.jsx';
 import Invito from './Invito.jsx';
 import Privacy from './Privacy.jsx';
 import AvvisoAggiornamento from './AvvisoAggiornamento.jsx';
+import { dimentica } from './push.js';
 
 // Codice del link di invito, se l'indirizzo è #/invito/<codice>.
 const codiceInvito = (hash) => /^#\/invito\/([A-Za-z0-9_-]+)$/.exec(hash)?.[1] ?? null;
@@ -30,6 +31,9 @@ export default function App() {
   // PC condiviso il prossimo utente si troverebbe dentro).
   async function esci(ovunque = false) {
     await (ovunque ? api.esciOvunque() : api.logout());
+    // Il server ha già cancellato le push legate alla sessione; qui si
+    // toglie anche l'iscrizione del browser.
+    await dimentica();
     setSessione(null);
   }
 

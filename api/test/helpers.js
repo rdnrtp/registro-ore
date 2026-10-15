@@ -6,9 +6,15 @@ const { creaPool } = require('../src/db');
 const { creaApp } = require('../src/app');
 const { eseguiMigrazioni } = require('../src/migrazioni');
 const { hashPassword } = require('../src/password');
+const crypto = require('node:crypto');
 const { elaboraCoda } = require('../src/posta/coda');
+const { elaboraCodaPush } = require('../src/push/coda');
 
 const PASSWORD = 'password-di-prova-123';
+
+// Chiavi VAPID di prova (le push non escono mai: vedi servizioPushFinto).
+const vapid = crypto.createECDH('prime256v1');
+vapid.generateKeys();
 
 const configTest = {
   port: 0,
@@ -22,6 +28,13 @@ const configTest = {
   appUrl: 'http://app.test',
   posta: { host: null, porta: 25, sicura: false, mittente: 'registro@app.test', intervalloSecondi: 1, maxTentativi: 3 },
   promemoriaIntervalloSecondi: 60,
+  push: {
+    chiavePubblica: vapid.getPublicKey('base64url'),
+    chiavePrivata: vapid.getPrivateKey('base64url'),
+    soggetto: 'mailto:allarmi@app.test',
+    intervalloSecondi: 1,
+    maxTentativi: 3,
+  },
 };
 
 async function creaDatabaseSeManca(nome) {
@@ -133,6 +146,44 @@ function trasportoFinto() {
 const erroreConnessione = () => Object.assign(new Error('connect ECONNREFUSED 10.0.0.1:25'), { code: 'ECONNECTION' });
 const erroreRifiuto = () => Object.assign(new Error('Mailbox unavailable'), { responseCode: 550, response: '550 5.1.1 Mailbox unavailable' });
 
+// Servizio push finto: registra le push "inviate" ({ endpoint, contenuto }).
+// guasta(fn): fn(endpoint) restituisce lo stato HTTP con cui rispondere
+// (404/410 = dispositivo non più valido, 500 = guasto) o null.
+function servizioPushFinto() {
+  const s = {
+    inviate: [],
+    guasto: null,
+    guasta(fn) {
+      s.guasto = fn;
+    },
+    async invia(iscrizione, contenuto) {
+      const stato = s.guasto?.(iscrizione.endpoint);
+      if (stato) throw Object.assign(new Error('Received unexpected response code'), { statusCode: stato, body: 'finto' });
+      s.inviate.push({ endpoint: iscrizione.endpoint, contenuto });
+      return { stato: 201 };
+    },
+  };
+  return s;
+}
+
+// Invia le push in coda; adesso = istante simulato.
+const elaboraPush = (pool, servizio, adesso = new Date(), config = configTest) =>
+  elaboraCodaPush(pool, { invia: servizio.invia, config, adesso });
+
+// Attiva le push per l'agente indicato, come farebbe il browser.
+// Restituisce l'iscrizione ({ endpoint, keys }).
+async function iscriviDispositivo(agente) {
+  const ecdh = crypto.createECDH('prime256v1');
+  ecdh.generateKeys();
+  const iscrizione = {
+    endpoint: `https://fcm.googleapis.com/fcm/send/${crypto.randomUUID()}`,
+    keys: { p256dh: ecdh.getPublicKey('base64url'), auth: crypto.randomBytes(16).toString('base64url') },
+  };
+  const res = await agente.post('/api/push/iscrizioni').send(iscrizione);
+  if (res.status !== 200) throw new Error(`Iscrizione push fallita: ${res.status} ${JSON.stringify(res.body)}`);
+  return iscrizione;
+}
+
 // Invia le email in coda con il trasporto indicato.
 const elabora = (pool, trasporto, config = configTest) => elaboraCoda(pool, { trasporto, config });
 
@@ -156,4 +207,7 @@ module.exports = {
   erroreRifiuto,
   elabora,
   emailInCoda,
+  servizioPushFinto,
+  elaboraPush,
+  iscriviDispositivo,
 };

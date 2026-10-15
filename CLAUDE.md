@@ -51,7 +51,7 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   provvisorio "Presenze" in `NOME_APP`, solo lì), icone provvisorie in
   `frontend/public/icone/` (`scripts/genera-icone.mjs`), service worker
   `public/sw.js` che non mette in cache nulla (solo pagina "Nessuna
-  connessione"). Aggiornamento dopo un rilascio: vedi "App installabile".
+  connessione", più le notifiche push e il tocco su di esse). Aggiornamento dopo un rilascio: vedi "App installabile".
 - Tasto Indietro: chiude la finestra aperta; da una sezione torna al Mese;
   dal Mese esce. Vedi `navigazione.js`.
 - Ogni utente ha un "orario tipo" settimanale che precompila il mese; poi corregge
@@ -66,9 +66,18 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   obbligatorio, o 465): per BV Brevo (`smtp-relay.brevo.com:587`, mittente
   `notifiche@apetris.com`; Brevo accetta solo IP autorizzati).
 - Notifiche agli utenti (promemoria, solleciti, avvisi, riaperture) solo
-  attraverso `notifica()` (`src/notifiche.js`), che le salva e le consegna con
-  ogni canale di `CANALI`: oggi l'email; dopo la messa online il push sarà un
-  secondo canale, senza toccare chi notifica.
+  attraverso `notifica()` (`src/notifiche.js`), che le salva e sceglie i
+  canali (push, email) con `REGOLE` per tipo; chi notifica non sa nulla dei
+  canali. L'autore dell'azione (`autore`) non riceve la notifica.
+- Fase 6b, notifiche push (Web Push con chiavi VAPID, libreria `web-push`):
+  avvisi e promemoria arrivano solo come push a chi ha almeno un dispositivo
+  con le push attive, per email agli altri; la riapertura sempre push +
+  email (contiene la motivazione); il sollecito solo email; la prova solo
+  push. Fascia di silenzio 22–7 ora italiana (non configurabile): le push
+  partono alle 7, le email no. Dispositivo non più valido (404/410) =
+  iscrizione cancellata; se la notifica non è arrivata su nessun dispositivo
+  ripiega sull'email. Iscrizione legata alla sessione: "Esci" la cancella.
+  Il permesso del browser si chiede solo dopo il tocco su "Attiva notifiche".
 - Fase 6 (produzione): un solo VPS Ubuntu LTS nell'UE con `compose.prod.yml`
   (distinto da quello di sviluppo) e Caddy davanti per l'HTTPS automatico.
   Database di produzione che parte vuoto: nessun dato di sviluppo trasferito.
@@ -115,7 +124,8 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   dei conteggi, oppure `--sostituisci`), `scarica-backup.sh`, `rilascia.sh`
   (backup, `git checkout --detach` di `origin/HEAD` o del commit indicato,
   build, migra, up, controllo HTTPS; annotato in `.rilasci.log`),
-  `torna-indietro.sh [--con-database]`.
+  `torna-indietro.sh [--con-database]`, `genera-chiavi-push.sh` (stampa le
+  due righe `VAPID_*` da copiare in `.env.production`, non scrive file).
 - `api/`: `src/app.js` (Express; rotte pubbliche, poi `autenticato` per tutto
   il resto di `/api`), `src/config.js` (variabili d'ambiente; con
   `AMBIENTE=produzione` `controllaProduzione` rifiuta l'avvio se una
@@ -135,7 +145,10 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   usato dal comando e dall'app), `src/inviti.js` (creazione dei link e
   loro email), `src/posta/` (`coda.js` = `accodaEmail`, `elaboraCoda`;
   `trasporto.js` = nodemailer; `messaggi.js` = testi di invito e invio del
-  mese), `src/notifiche.js` (`notifica`, canali), `src/invio-mese.js`
+  mese), `src/notifiche.js` (`notifica`, `REGOLE` dei canali,
+  `ripiegaSuEmail`, `linkMese`), `src/push/` (`coda.js` = `elaboraCodaPush`;
+  `invio.js` = web-push), `routes/push.js` (iscrizioni del dispositivo,
+  prova), `src/invio-mese.js`
   (destinatari e versioni inviate), `src/promemoria.js`, `src/avvio.js`
   (lavori in sottofondo: coda email e promemoria, avviati da `server.js`),
   `src/tempo.js` (ora italiana),
@@ -171,6 +184,9 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   `OrarioTipo.jsx`, `#/collaboratori/AAAA/M` = `Collaboratori.jsx`,
   `#/collaboratori/<id>/AAAA/M` = `MeseCollaboratore.jsx` (sola lettura),
   `#/bacheca[/<id>]` = `Bacheca.jsx` (contatore dei non letti nella barra),
+  `#/notifiche` = `Notifiche.jsx` (pulsante "Notifiche" nella barra in alto,
+  accanto a "Esci"; logica del browser in `push.js`), `#/mese/AAAA/M` = il
+  proprio mese indicato (link di notifiche ed email; Indietro torna a `#/`),
   `#/gestione[/utenti|attivita|settori|bacheca|impianto|email|registro]` =
   `Gestione.jsx` e `Gestione*.jsx`, `RegistroModifiche.jsx`. `VistaMese.jsx`
   = parti comuni alle viste del mese (elenco dei giorni, totali, `salvaFile`);
@@ -203,7 +219,11 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   Android, immagine `mcr.microsoft.com/playwright`, stessa versione di
   `@playwright/test`) contro il frontend compilato servito da `web`, con
   l'API simulata (`test/api-finta.js`, impianto finto, oggi = 14/10/2026):
-  `indietro.spec.js`, `installabile.spec.js`, `password.spec.js`,
+  `indietro.spec.js` (anche il tocco su una notifica, simulato con il
+  messaggio del service worker), `installabile.spec.js`, `notifiche.spec.js`
+  (pagina Notifiche con permesso e iscrizione finti; push consegnata al
+  service worker via CDP, `showNotification` sostituita perché Chromium
+  senza schermo nega il permesso), `password.spec.js`,
   `schermate.spec.js` (screenshot a 360/390/412/1280 px in
   `e2e/risultati/schermate/`, non tracciata; niente scorrimento
   orizzontale né errori nella pagina; `piccoli-*.json` = elementi sotto i
@@ -425,6 +445,17 @@ mai modificare uno già applicato.
 - Riapertura, invio e sollecito bloccano la riga dell'utente interessato
   (`FOR NO KEY UPDATE`) come le modifiche alle ore: non si incrociano.
 
+Migrazione `012_push.sql`:
+
+- `push_subscriptions`: dispositivo con le push attive (utente,
+  `session_id` → `user_sessions` ON DELETE CASCADE, `endpoint` unico,
+  chiavi `p256dh`/`auth`, `last_success_at`).
+- `notifications.short_body` (testo della push), `email_from_name`,
+  `email_reply_to` (per l'email di ripiego).
+- `push_outbox`: una riga per notifica e dispositivo; stati come
+  `email_outbox`; `subscription_id` diventa null se il dispositivo viene
+  cancellato (la riga va in errore e la notifica può ripiegare sull'email).
+
 ## API della Fase 2 (`src/routes/registro.js`)
 
 - `GET /api/mese/:anno/:mese` → `{ stato, max_sedute_pt_per_tipo,
@@ -598,6 +629,50 @@ Coda e promemoria (`src/posta/coda.js`, `src/promemoria.js`):
   inviato. Server spento all'ora prevista = recupero più tardi nello stesso
   giorno, mai nei giorni dopo.
 
+## Notifiche push (Fase 6b)
+
+- `GET /api/push` → `{ chiave_pubblica (null = push spente: mancano le
+  chiavi VAPID, solo in sviluppo), dispositivi }`.
+- `POST /api/push/iscrizioni` = `PushSubscription.toJSON()` del browser:
+  endpoint `https` solo dei servizi push noti (Google, Mozilla, Apple,
+  Microsoft; niente porte: il server non contatta indirizzi scelti dal
+  client), chiavi di 65 e 16 byte. Legata alla sessione corrente; lo stesso
+  browser usato da un altro utente passa a lui. `DELETE /api/push/iscrizioni`
+  `{ endpoint }` (solo le proprie). `POST /api/push/prova`: a tutti i propri
+  dispositivi, subito anche di notte; 409 senza dispositivi, 429 oltre 3 al
+  minuto. Nessuna rotta accetta un utente.
+- `GET /api/utenti` ha `dispositivi_push` (Gestione → Utenti: "Notifiche
+  push attive").
+- Coda (`elaboraCodaPush`, ogni `PUSH_INTERVALLO_SECONDI` = 5): nella fascia
+  di silenzio la riga slitta alle 7 (`fuoriDalSilenzio` in `tempo.js`, anche
+  nei cambi d'ora); 404/410 = iscrizione cancellata + `ripiegaSuEmail`;
+  rete/429/5xx = nuovo tentativo (1, 2, 4… min) fino a `PUSH_MAX_TENTATIVI`
+  (6), poi errore + ripiego. Una riga rimasta `in_invio` torna in attesa (il
+  `tag` = id della notifica evita i doppioni sul telefono). TTL 24 ore.
+  `ripiegaSuEmail` blocca la notifica e manda l'email solo se nessuna push è
+  arrivata o in corso e l'email non c'è già.
+- Contenuto della push: `{ titolo, testo (short_body), link, tag }`. Link:
+  avviso `#/bacheca/<id>`, promemoria e riapertura `#/mese/AAAA/M` (anche
+  nelle email, come il sollecito).
+- Service worker: `push` mostra la notifica; `notificationclick` porta in
+  primo piano una finestra già aperta e le manda `{ tipo: 'apri', link }`
+  (`main.jsx` chiama `naviga`, così Indietro risale come sempre), altrimenti
+  apre `/<link>` (la catena la costruisce `avviaNavigazione`). Solo link
+  `#/…`.
+- Frontend (`push.js`): in `localStorage` l'id dell'utente che le ha
+  attivate sul dispositivo; all'apertura (`rinnova`, in `Home`) l'iscrizione
+  si ripresenta al server, perché un nuovo accesso dopo la scadenza ha
+  cancellato quella della vecchia sessione. "Esci" toglie anche l'iscrizione
+  del browser (`dimentica`). iPhone senza app sulla schermata Home =
+  istruzioni invece del pulsante; permesso negato = come riattivarlo.
+- `/api/stato` ha anche `push` ("in ritardo" = push dovute da oltre 30 minuti).
+- In produzione `VAPID_PUBLIC_KEY` e `VAPID_PRIVATE_KEY` sono obbligatorie
+  (`controllaProduzione`); il soggetto VAPID è `mailto:ALLARMI_EMAIL`.
+- Test: `test/push.test.js` (scelta push/email, autore, silenzio con cambi
+  d'ora, dispositivi non validi, errori temporanei, uscita, prova, permessi,
+  isolamento). Il servizio push finto è `servizioPushFinto()` in `helpers.js`;
+  le chiavi di prova sono in `configTest.push`.
+
 ## Esportazione Excel (Fase 3, `src/routes/esportazione.js`, `src/excel/`)
 
 - `GET /api/mese/:anno/:mese/excel` → file `.xlsx` del mese dell'utente
@@ -675,7 +750,8 @@ Coda e promemoria (`src/posta/coda.js`, `src/promemoria.js`):
    server c'è un `contatti.json` **di prova** (tutti gli indirizzi sono di
    rdnrtp@gmail.com, con `+settore`): nessuna email può arrivare a BV. Il
    passaggio agli indirizzi reali è RUNBOOK 11.2, solo dopo il via libera.
-   Notifiche push: dopo la messa online.
+   Fase 6b, notifiche push: sviluppata il 15/10/2026 (diario in
+   `deploy/PROGRESSO.md`).
 7. Riepilogo per la direzione
 
 Lavora una fase alla volta e fermati alla fine di ciascuna per il resoconto.

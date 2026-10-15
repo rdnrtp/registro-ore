@@ -279,6 +279,11 @@ export default function GestioneUtenti({ utente: io }) {
                 )}
                 {statoAccesso(u) && <small className="nota">{statoAccesso(u)}</small>}
                 {u.esonerato_invio && <small>non deve inviare il mese</small>}
+                {u.dispositivi_push > 0 && (
+                  <small className="push-attive">
+                    Notifiche push attive{u.dispositivi_push > 1 ? ` su ${u.dispositivi_push} dispositivi` : ''}
+                  </small>
+                )}
               </span>
               <span className={`etichetta ${u.ruolo}`}>{u.ruolo}</span>
             </button>

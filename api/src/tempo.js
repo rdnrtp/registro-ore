@@ -36,4 +36,30 @@ const dataOraIt = (istante) =>
 // "31 ottobre 2026"
 const dataIt = (istante) => formatoData.format(new Date(istante));
 
-module.exports = { FUSO, inItalia, dataOraIt, dataIt };
+// Istante in cui in Italia è l'ora indicata del giorno indicato (ora solare
+// o legale secondo il giorno). Il mese e il giorno possono sforare
+// (giorno 32 = primo del mese dopo), come in Date.UTC.
+function istanteItaliano(anno, mese, giorno, ora) {
+  // Ora solare: UTC+1; se non torna, ora legale: UTC+2.
+  let t = Date.UTC(anno, mese - 1, giorno, ora) - 3600 * 1000;
+  if (inItalia(new Date(t)).ora !== ora) t -= 3600 * 1000;
+  return new Date(t);
+}
+
+// Fascia di silenzio delle notifiche push: dalle 22:00 alle 7:00 italiane.
+const SILENZIO = { dalle: 22, alle: 7 };
+
+const inSilenzio = (istante = new Date()) => {
+  const { ora } = inItalia(istante);
+  return ora >= SILENZIO.dalle || ora < SILENZIO.alle;
+};
+
+// Primo istante utile per una push: subito, oppure le 7:00 se si è nella
+// fascia di silenzio (del giorno dopo, se sono già passate le 22).
+function fuoriDalSilenzio(istante = new Date()) {
+  if (!inSilenzio(istante)) return istante;
+  const { anno, mese, giorno, ora } = inItalia(istante);
+  return istanteItaliano(anno, mese, ora >= SILENZIO.dalle ? giorno + 1 : giorno, SILENZIO.alle);
+}
+
+module.exports = { FUSO, inItalia, dataOraIt, dataIt, istanteItaliano, SILENZIO, inSilenzio, fuoriDalSilenzio };

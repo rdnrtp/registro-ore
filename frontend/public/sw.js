@@ -3,8 +3,9 @@
 // dell'API. Ogni apertura scarica dal server la versione in uso, quindi dopo
 // un rilascio l'app installata è già aggiornata (vedi AvvisoAggiornamento.jsx
 // per l'app rimasta aperta in sottofondo).
-// Unico compito: se manca la connessione, invece della pagina di errore del
-// browser mostra un messaggio in italiano.
+// Compiti: se manca la connessione, invece della pagina di errore del
+// browser mostra un messaggio in italiano; mostra le notifiche push e, al
+// tocco, apre l'app sulla pagina giusta (Notifiche.jsx, api/src/push/).
 
 const PAGINA_OFFLINE = `<!doctype html>
 <html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -28,6 +29,49 @@ self.addEventListener('activate', (event) => {
       // La pagina parte a scaricarsi mentre il service worker si avvia.
       await self.registration.navigationPreload?.enable();
       await self.clients.claim();
+    })(),
+  );
+});
+
+// ------------------------------------------------------- Notifiche push
+
+// Contenuto mandato dall'API: { titolo, testo, link: '#/…', tag }. Lo
+// stesso tag sostituisce la notifica invece di mostrarne una seconda.
+self.addEventListener('push', (event) => {
+  let d = {};
+  try {
+    d = event.data?.json() ?? {};
+  } catch {
+    d = {};
+  }
+  const link = typeof d.link === 'string' && d.link.startsWith('#/') ? d.link : '#/';
+  event.waitUntil(
+    self.registration.showNotification(d.titolo || 'Registro ore', {
+      body: d.testo || '',
+      tag: d.tag || undefined,
+      icon: '/icone/icona-192.png',
+      lang: 'it',
+      data: { link },
+    }),
+  );
+});
+
+// Tocco sulla notifica: se l'app è già aperta la porta in primo piano e le
+// chiede di andare alla pagina (navigazione.js, così Indietro funziona come
+// sempre); altrimenti la apre direttamente su quella pagina.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const link = event.notification.data?.link || '#/';
+  event.waitUntil(
+    (async () => {
+      const finestre = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const aperta = finestre.find((f) => new URL(f.url).origin === self.location.origin);
+      if (aperta) {
+        const attiva = await aperta.focus().catch(() => aperta);
+        (attiva || aperta).postMessage({ tipo: 'apri', link });
+        return;
+      }
+      await self.clients.openWindow(`/${link}`);
     })(),
   );
 });
