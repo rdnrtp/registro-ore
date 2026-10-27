@@ -565,8 +565,9 @@ funzionano, altrimenti **503** e il nome del controllo fallito
 (`"posta":"in ritardo"` = email ferme da oltre 30 minuti, `"push":"in
 ritardo"` = notifiche push ferme da oltre 30 minuti). Non mostra dati.
 
-Con un servizio di monitoraggio gratuito (es. UptimeRobot o Better Stack;
-verifica le condizioni d'uso del piano gratuito):
+Con un servizio di monitoraggio (per BV: **Better Stack**, piano gratuito;
+non UptimeRobot, il cui piano gratuito è solo per uso non commerciale;
+verifica sempre le condizioni d'uso del piano scelto):
 
 1. crea un monitor **HTTP(S)** sull'indirizzo `https://«DOMINIO»/api/stato`;
 2. intervallo 5 minuti; avviso quando la risposta **non è 200**;

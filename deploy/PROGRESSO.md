@@ -68,9 +68,9 @@ Email: le email delle prove di oggi (password dimenticata, avviso delle
 "Consegnata", e non sono arrivate in Gmail; il reinoltro dallo stesso
 pannello di Brevo è arrivato. Le email del 12/10 risultano consegnate.
 L'app le ha prese in carico correttamente. Ipotesi: ritardo di Gmail verso
-il server condiviso di Brevo (77.32.148.25). Da ricontrollare il 15/10
-(compare "Consegnata" in ritardo?); se si ripete, ticket a Brevo con il
-Message-ID.
+il server condiviso di Brevo (77.32.148.25). **Chiarito:** le email erano
+arrivate in Gmail (trovate nella casella); nessun problema di consegna
+aperto.
 
 ## Rilascio del 14/10/2026, ore 17:25 (`6f43d93`)
 
@@ -84,20 +84,26 @@ Push per avvisi, promemoria e riaperture (vedi CLAUDE.md, "Notifiche push").
 Rilascio: prima le chiavi VAPID in `.env.production` (RUNBOOK 6.4, poi
 copia nel gestore di password), poi `rilascia.sh` (migrazione 012).
 
-- [ ] Chiavi VAPID create sul server e copia di `.env.production` aggiornata.
-- [ ] Rilascio con `rilascia.sh`, migrazione 012.
-- [ ] Prove dal telefono Android: attivazione, notifica di prova, avviso
-  ricevuto da Prova Uno (riattivato), fascia di silenzio, tocco sulla
-  notifica, Indietro dopo il tocco.
-- [ ] Prova Uno di nuovo disattivato dopo le prove (se non serve più).
+- [x] Chiavi VAPID create sul server e copia di `.env.production` aggiornata.
+- [x] Rilascio con `rilascia.sh` (`42916f5`), migrazione 012.
+- [x] Prove dal telefono Android: le notifiche push arrivano correttamente.
+- [x] Prova Uno di nuovo disattivato dopo le prove.
+
+## Controlli del 27/10/2026
+
+- Backup notturno e segnale a Healthchecks.io: funzionano ogni notte.
+- Monitoraggio esterno di `/api/stato` attivo su **Better Stack** (non
+  UptimeRobot: il suo piano gratuito è solo per uso non commerciale).
+- Email del 14/10 "non consegnate": erano arrivate (vedi sopra).
 
 ## Da fare
 
 - [ ] `sudo ufw status` mai visto da Claude (lo script l'ha mostrato ad Andrea).
-- [ ] Monitoraggio `/api/stato` e Healthchecks del backup (RUNBOOK 10).
+- [x] Monitoraggio `/api/stato` (Better Stack) e Healthchecks del backup (RUNBOOK 10).
 - [ ] Informativa sulla privacy completata e verificata.
-- [ ] Email non consegnate a Gmail il 14/10 (sopra): capire prima di invitare i colleghi.
+- [x] Email non consegnate a Gmail il 14/10: erano arrivate, nessun problema.
 - [ ] Prova "Aggiorna" con una finestra aperta: aprire la scheda di un giorno
   PRIMA del rilascio, poi tornare sull'app (il 14/10 la scheda è stata aperta
   dopo il ritorno in primo piano, quando l'app si era già ricaricata da sola).
+  Da fare con il rilascio dei rimborsi spese.
 - [ ] Al via libera: indirizzi reali di BV e disattivazione di Prova Uno (RUNBOOK 11.2).
