@@ -104,14 +104,20 @@ seconda email con il PDF delle spese solo alla segreteria (vedi CLAUDE.md,
 (`SPESE_MAX_PDF_MB` facoltativa, 4). Caddyfile cambiato (foto fino a 20 MB):
 in questo rilascio Caddy si ricrea a mano (RUNBOOK 13.2).
 
-- [ ] Prova "Aggiorna" preparata prima del rilascio (scheda di un giorno
-  aperta, app in sottofondo).
-- [ ] Rilascio con `rilascia.sh`, migrazione 013, Caddy ricreato.
-- [ ] Backup manuale: "ricevute delle spese: N" nel registro.
-- [ ] Prove dal telefono Android: foto scattata dall'app, foto dalla
-  galleria, PDF, invio del mese con le due email, PDF delle spese
-  controllato, modalità "subito" (Prova Uno riattivato e poi disattivato).
-- [ ] Prova di ripristino (RUNBOOK 9.3) con spese e ricevute: "tutti integri".
+- [x] Prova "Aggiorna" con la scheda di un giorno aperta prima del rilascio:
+  al ritorno sull'app compare l'avviso "Aggiorna" e funziona.
+- [x] Rilascio con `rilascia.sh` (`c5b23cd`), migrazione 013, Caddy ricreato
+  (`max_size 21MB`), `/api/stato` ok.
+- [x] Backup manuale: "31 tabelle (ricevute delle spese: 2)", copia su B2.
+- [x] Prove dal telefono Android: foto scattata dall'app, foto dalla
+  galleria, PDF, invio del mese con le due email (quella delle spese senza
+  i responsabili in copia), PDF delle spese controllato, modalità "subito"
+  con Prova Uno (email arrivata subito; Prova Uno di nuovo disattivato,
+  modalità tornata "Insieme al mese"). Ricevute leggere.
+- [x] Nessuna foto salvata con metadati: "0 foto con EXIF su 2".
+- [x] Prova di ripristino (RUNBOOK 9.3) della copia manuale del 27/10/2026
+  scaricata da B2: PROVA RIUSCITA, ricevute integre (2). Tabella dei
+  conteggi non conservata.
 
 ## Da fare
 
@@ -119,8 +125,5 @@ in questo rilascio Caddy si ricrea a mano (RUNBOOK 13.2).
 - [x] Monitoraggio `/api/stato` (Better Stack) e Healthchecks del backup (RUNBOOK 10).
 - [ ] Informativa sulla privacy completata e verificata.
 - [x] Email non consegnate a Gmail il 14/10: erano arrivate, nessun problema.
-- [ ] Prova "Aggiorna" con una finestra aperta: aprire la scheda di un giorno
-  PRIMA del rilascio, poi tornare sull'app (il 14/10 la scheda è stata aperta
-  dopo il ritorno in primo piano, quando l'app si era già ricaricata da sola).
-  Da fare con il rilascio dei rimborsi spese.
+- [x] Prova "Aggiorna" con una finestra aperta (27/10/2026, rilascio dei rimborsi spese).
 - [ ] Al via libera: indirizzi reali di BV e disattivazione di Prova Uno (RUNBOOK 11.2).
