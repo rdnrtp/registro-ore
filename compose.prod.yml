@@ -83,6 +83,8 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       POSTA_MITTENTE: ${POSTA_MITTENTE:-}
       POSTA_MAX_TENTATIVI: ${POSTA_MAX_TENTATIVI:-8}
+      # Dimensione massima del PDF delle spese allegato all'email, in MB.
+      SPESE_MAX_PDF_MB: ${SPESE_MAX_PDF_MB:-4}
       ALLARMI_EMAIL: ${ALLARMI_EMAIL:-}
       # Notifiche push (obbligatorie: senza, l'API non parte).
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}

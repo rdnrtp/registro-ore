@@ -5,12 +5,13 @@ import { dataOra } from './GestioneUtenti.jsx';
 import Foglio from './Foglio.jsx';
 import SedutePt from './SedutePt.jsx';
 import StatoInvio from './StatoInvio.jsx';
+import { ElencoSpese, SpesaDelCollega } from './Spese.jsx';
 import { naviga } from './navigazione.js';
 import { ElencoGiorni, NavigazioneMese, TotaliMese, salvaFile, usaRiepilogo } from './VistaMese.jsx';
 
 // Mese di un altro utente in sola lettura. Il responsabile vede solo le righe
-// dei suoi settori; l'amministratore tutto, sedute PT comprese, e può
-// scaricare il file Excel.
+// dei suoi settori; l'amministratore tutto, sedute PT e spese comprese, e può
+// scaricare il file Excel e il PDF delle spese.
 export default function MeseCollaboratore({ id, anno, mese, attivita, utente }) {
   const [dati, setDati] = useState(null);
   const [errore, setErrore] = useState('');
@@ -20,6 +21,7 @@ export default function MeseCollaboratore({ id, anno, mese, attivita, utente }) 
   const [riapertura, setRiapertura] = useState(null); // testo della motivazione, null = chiuso
   const [avviso, setAvviso] = useState('');
   const [attesa, setAttesa] = useState(false);
+  const [spesa, setSpesa] = useState(null); // spesa aperta
   const admin = utente.ruolo === 'amministratore';
 
   useEffect(() => {
@@ -62,15 +64,17 @@ export default function MeseCollaboratore({ id, anno, mese, attivita, utente }) 
     }
   }
 
-  async function scaricaVersione(v) {
+  async function scarica(azione, nome) {
     setErrore('');
     try {
-      const { blob, nomeFile } = await api.fileInviatoDi(id, anno, mese, v);
-      salvaFile(blob, nomeFile ?? `${anno}-${mese}.xlsx`);
+      const { blob, nomeFile } = await azione();
+      salvaFile(blob, nomeFile ?? nome);
     } catch (err) {
       setErrore(err.message);
     }
   }
+  const scaricaVersione = (v) => scarica(() => api.fileInviatoDi(id, anno, mese, v), `${anno}-${mese}.xlsx`);
+  const scaricaSpeseVersione = (v) => scarica(() => api.pdfSpeseInviatoDi(id, anno, mese, v), `Spese_${anno}_${mese}.pdf`);
 
   async function esegui(azione, messaggio) {
     setErrore('');
@@ -165,7 +169,9 @@ export default function MeseCollaboratore({ id, anno, mese, attivita, utente }) 
             {dati.solo_settori_propri && ' Vedi solo le attività dei tuoi settori.'}
             {!dati.utente.attivo && ' Utente disattivato.'}
           </p>
-          {admin && <StatoInvio stato={dati.stato} invii={dati.invii} onScarica={scaricaVersione} />}
+          {admin && (
+            <StatoInvio stato={dati.stato} invii={dati.invii} onScarica={scaricaVersione} onScaricaSpese={scaricaSpeseVersione} />
+          )}
           <ElencoGiorni anno={anno} mese={mese} perGiorno={perGiorno} perId={perId} oggi={oggiIso()} />
           <TotaliMese nomeMese={nomeMese} totali={totali} perId={perId} />
           {dati.sedute_pt && (
@@ -179,8 +185,31 @@ export default function MeseCollaboratore({ id, anno, mese, attivita, utente }) 
               onCambiate={() => {}}
             />
           )}
+          {/* Solo l'amministratore riceve le spese (null per il responsabile). */}
+          {dati.spese && (
+            <section className="sezione spese" aria-labelledby="titolo-spese">
+              <h2 id="titolo-spese">Spese di trasferta</h2>
+              <ElencoSpese
+                spese={dati.spese}
+                onApri={setSpesa}
+                urlRicevuta={(a) => `/api/collaboratori/${id}/spese/allegati/${a.id}`}
+              />
+              {dati.spese.some((s) => !s.inviata) && (
+                <div className="comandi-spese">
+                  <button
+                    type="button"
+                    className="neutro"
+                    onClick={() => scarica(() => api.pdfSpeseDi(id, anno, mese), `Spese_${anno}_${mese}.pdf`)}
+                  >
+                    {dati.stato === 'inviato' ? 'Scarica il PDF inviato' : 'Anteprima del PDF'}
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
         </>
       )}
+      {spesa && <SpesaDelCollega spesa={spesa} utenteId={id} onChiudi={() => setSpesa(null)} />}
 
       {riapertura !== null && (
         <Foglio

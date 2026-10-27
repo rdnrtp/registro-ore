@@ -28,6 +28,7 @@ const configTest = {
   appUrl: 'http://app.test',
   posta: { host: null, porta: 25, sicura: false, mittente: 'registro@app.test', intervalloSecondi: 1, maxTentativi: 3 },
   promemoriaIntervalloSecondi: 60,
+  spese: { maxPdfMb: 4 },
   push: {
     chiavePubblica: vapid.getPublicKey('base64url'),
     chiavePrivata: vapid.getPrivateKey('base64url'),

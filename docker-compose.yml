@@ -56,6 +56,8 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       POSTA_MITTENTE: ${POSTA_MITTENTE:-registro-ore@localhost}
       POSTA_MAX_TENTATIVI: ${POSTA_MAX_TENTATIVI:-8}
+      # Dimensione massima del PDF delle spese allegato all'email, in MB.
+      SPESE_MAX_PDF_MB: ${SPESE_MAX_PDF_MB:-4}
       # Notifiche push: senza chiavi sono spente e tutto va per email. Dal
       # telefono servono comunque HTTPS (non http://<IP del PC>).
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}

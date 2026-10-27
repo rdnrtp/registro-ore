@@ -96,6 +96,23 @@ copia nel gestore di password), poi `rilascia.sh` (migrazione 012).
   UptimeRobot: il suo piano gratuito è solo per uso non commerciale).
 - Email del 14/10 "non consegnate": erano arrivate (vedi sopra).
 
+## Rimborsi spese (sviluppati il 27/10/2026)
+
+Sezione "Spese di trasferta" nel mese, ricevute (foto o PDF) nel database,
+seconda email con il PDF delle spese solo alla segreteria (vedi CLAUDE.md,
+"Rimborsi spese"). Migrazione 013. Nessuna variabile obbligatoria nuova
+(`SPESE_MAX_PDF_MB` facoltativa, 4). Caddyfile cambiato (foto fino a 20 MB):
+in questo rilascio Caddy si ricrea a mano (RUNBOOK 13.2).
+
+- [ ] Prova "Aggiorna" preparata prima del rilascio (scheda di un giorno
+  aperta, app in sottofondo).
+- [ ] Rilascio con `rilascia.sh`, migrazione 013, Caddy ricreato.
+- [ ] Backup manuale: "ricevute delle spese: N" nel registro.
+- [ ] Prove dal telefono Android: foto scattata dall'app, foto dalla
+  galleria, PDF, invio del mese con le due email, PDF delle spese
+  controllato, modalità "subito" (Prova Uno riattivato e poi disattivato).
+- [ ] Prova di ripristino (RUNBOOK 9.3) con spese e ricevute: "tutti integri".
+
 ## Da fare
 
 - [ ] `sudo ufw status` mai visto da Claude (lo script l'ha mostrato ad Andrea).

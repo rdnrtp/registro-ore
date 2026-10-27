@@ -14,6 +14,8 @@ const NOMI_CAMPI = {
   esonerato_invio: 'non deve inviare il mese',
   email_invio: 'indirizzo di invio',
   promemoria: 'promemoria',
+  invio_spese: 'invio delle spese',
+  attivo: 'in uso',
   titolo: 'titolo',
   testo: 'testo',
   importante: 'importante',
@@ -87,6 +89,10 @@ function descrivi({ azione, dettagli: d }) {
       return `ha modificato il settore «${d.settore}»: ${differenze(d)}`;
     case 'settore.eliminato':
       return `ha eliminato il settore «${d.settore}»`;
+    case 'tipo_spesa.creato':
+      return `ha aggiunto il tipo di spesa «${d.nome}»`;
+    case 'tipo_spesa.modificato':
+      return `ha modificato il tipo di spesa «${d.tipo}»: ${differenze(d)}`;
     case 'organizzazione.modificata':
       return `ha cambiato la configurazione dell'impianto: ${differenze(d)}`;
     case 'mese.riaperto':

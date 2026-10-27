@@ -9,11 +9,14 @@ const { accodaEmail } = require('../posta/coda');
 const { emailInvioMese } = require('../posta/messaggi');
 const { destinatariMese, elencoInvii } = require('../invio-mese');
 const { leggiDatiMese, generaFileMese, totaliMese } = require('./esportazione');
+const { riepilogoSpeseMese, inviaSpeseConMese } = require('../spese/invio');
 
 // Invio del proprio mese alla segreteria. Come per le altre registrazioni
 // personali, l'utente è sempre req.utente.id: nessuno invia il mese di un
 // altro. Riapertura e solleciti (amministratore) sono in collaboratori.js.
-function rotteInvio({ pool }) {
+// Se nel mese ci sono spese da rimborsare parte anche una seconda email,
+// solo alla segreteria, con il PDF delle spese (spese/invio.js).
+function rotteInvio({ pool, config }) {
   const router = express.Router();
 
   function periodo(params) {
@@ -41,7 +44,8 @@ function rotteInvio({ pool }) {
     };
   }
 
-  // Riepilogo prima dell'invio: totali, nome del file, destinatari, avvisi.
+  // Riepilogo prima dell'invio: totali, nome del file, destinatari, avvisi;
+  // spese = cosa partirebbe con la seconda email (null = nessuna email).
   router.get('/mese/:anno/:mese/invio', async (req, res) => {
     const { anno, mese } = periodo(req.params);
     const u = req.utente;
@@ -53,7 +57,13 @@ function rotteInvio({ pool }) {
         'SELECT status FROM month_submissions WHERE user_id = $1 AND organization_id = $2 AND year = $3 AND month = $4',
         [u.id, u.organizzazioneId, anno, mese],
       );
-      return { dati, destinatari: await destinatariMese(client, chi), stato: stato.rows[0]?.status ?? 'aperto', invii: await elencoInvii(client, chi) };
+      return {
+        dati,
+        destinatari: await destinatariMese(client, chi),
+        stato: stato.rows[0]?.status ?? 'aperto',
+        invii: await elencoInvii(client, chi),
+        spese: await riepilogoSpeseMese(client, chi, config),
+      };
     });
     const precedente = r.invii[0];
     res.json({
@@ -67,6 +77,7 @@ function rotteInvio({ pool }) {
       avvisi: avvisi(anno, mese, r.dati),
       // Dopo una riapertura il nuovo invio sostituisce il precedente.
       sostituisce: precedente ? { versione: precedente.versione, inviato_il: precedente.inviato_il } : null,
+      spese: r.spese,
     });
   });
 
@@ -160,6 +171,9 @@ function rotteInvio({ pool }) {
         allegatoInvioId: nuova[0].id,
         riferimentoId: precedente?.email_id ?? null,
       });
+      // Seconda email con le spese; se il PDF è troppo grande l'invio del
+      // mese si annulla tutto, con un messaggio chiaro.
+      await inviaSpeseConMese(client, chi, nuova[0].id, config);
     });
     res.status(201).json({ anno, mese, stato: 'inviato', invii: await elencoInvii(pool, chi) });
   });

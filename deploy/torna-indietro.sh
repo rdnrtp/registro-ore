@@ -57,4 +57,9 @@ else
   dc up -d --remove-orphans --wait
   attendi_app 180 || { errore "l'app non risponde: ./deploy/compose.sh logs --tail 100 api"; exit 1; }
 fi
+# Caddyfile montato come singolo file: se è cambiato, Caddy va ricreato.
+if ! git diff --quiet "$PRIMA" "$DOPO" -- deploy/Caddyfile; then
+  info "Il Caddyfile è cambiato: ricreo Caddy"
+  dc up -d --force-recreate --wait caddy
+fi
 info "TORNATO ALLA VERSIONE $(git log -1 --format='%h %s')"

@@ -9,7 +9,9 @@
 #
 # PROVA: ripristina in un database separato (<nome>_prova) accanto a quello
 # dell'app, che non viene toccato; confronta i conteggi delle tabelle
-# principali con quelli attuali; poi cancella il database di prova.
+# principali (spese e ricevute comprese) con quelli attuali; controlla che
+# ogni file salvato nel database (ricevute, Excel e PDF inviati)
+# corrisponda alla sua impronta SHA-256; poi cancella il database di prova.
 #
 # RIPRISTINO VERO: fa prima una copia del database attuale (backup manuale),
 # ferma l'app, sostituisce il database con il contenuto del backup, applica
@@ -27,7 +29,7 @@ FILE="${1:-}"
 MODO="${2:---prova}"
 case "$MODO" in --prova | --tieni | --sostituisci) ;; *) FILE="" ;; esac
 if [[ -z "$FILE" ]]; then
-  sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
   exit 2
 fi
 if [[ "$FILE" == ultimo ]]; then
@@ -76,7 +78,34 @@ UNION ALL SELECT 'email', count(*) FROM email_outbox
 UNION ALL SELECT 'ultima migrazione', max(version)::text::int FROM (SELECT left(version, 3) AS version FROM schema_migrations) m
 UNION ALL SELECT 'ultimo giorno con ore (AAAAMMGG)', to_char(max(entry_date), 'YYYYMMDD')::int FROM time_entries
 "
-conteggi() { psql_su -d "$1" -A -t -F '|' -c "$CONTEGGI"; }
+# Spese e ricevute (dalla migrazione 013: un backup più vecchio non le ha).
+CONTEGGI_SPESE="
+SELECT 'spese', count(*) FROM expenses
+UNION ALL SELECT 'ricevute', count(*) FROM expense_attachments
+UNION ALL SELECT 'ricevute (KB)', COALESCE(sum(size), 0) / 1024 FROM expense_attachments
+UNION ALL SELECT 'invii delle spese', count(*) FROM expense_submissions
+"
+# File salvati nel database il cui contenuto non corrisponde più all'impronta
+# SHA-256 registrata quando sono stati salvati (devono essere 0).
+INTEGRITA="
+SELECT count(*) FILTER (WHERE encode(sha256(file), 'hex') <> file_sha256) FROM month_submission_versions
+"
+INTEGRITA_SPESE="
+SELECT (SELECT count(*) FROM expense_attachments WHERE encode(sha256(file), 'hex') <> sha256)
+     + (SELECT count(*) FROM expense_submissions WHERE file IS NOT NULL AND encode(sha256(file), 'hex') <> file_sha256)
+"
+ha_spese() { [[ "$(psql_su -d "$1" -A -t -c "SELECT to_regclass('public.expense_attachments') IS NOT NULL")" == t ]]; }
+conteggi() {
+  psql_su -d "$1" -A -t -F '|' -c "$CONTEGGI"
+  if ha_spese "$1"; then psql_su -d "$1" -A -t -F '|' -c "$CONTEGGI_SPESE"; fi
+}
+# Numero di file alterati (ricevute, file Excel e PDF inviati).
+file_alterati() {
+  local n
+  n="$(psql_su -d "$1" -A -t -c "$INTEGRITA")"
+  if ha_spese "$1"; then n=$((n + $(psql_su -d "$1" -A -t -c "$INTEGRITA_SPESE"))); fi
+  echo "$n"
+}
 
 if [[ "$MODO" != --sostituisci ]]; then
   PROVA="${DB}_prova"
@@ -86,6 +115,13 @@ if [[ "$MODO" != --sostituisci ]]; then
   info "Ripristino di prova completato. Confronto con il database attuale:"
   join -t '|' -a 1 -e '-' -o '0,1.2,2.2' <(conteggi "$PROVA" | sort -t '|' -k1,1) <(conteggi "$DB" 2> /dev/null | sort -t '|' -k1,1) |
     awk -F '|' 'BEGIN { printf "  %-34s %12s %12s\n", "", "BACKUP", "ATTUALE" } { printf "  %-34s %12s %12s\n", $1, $2, $3 }'
+  ALTERATI="$(file_alterati "$PROVA")"
+  if [[ "$ALTERATI" != 0 ]]; then
+    errore "$ALTERATI file (ricevute, Excel o PDF inviati) nel backup non corrispondono alla loro impronta: PROVA NON RIUSCITA"
+    psql_su -d postgres -c "DROP DATABASE \"$PROVA\" WITH (FORCE)" || true
+    exit 1
+  fi
+  info "File salvati nel database (ricevute, Excel e PDF inviati): tutti integri"
   if [[ "$MODO" == --tieni ]]; then
     info "Il database $PROVA resta (cancellalo con: ./deploy/compose.sh exec db dropdb -U $UTENTE_DB $PROVA)"
   else

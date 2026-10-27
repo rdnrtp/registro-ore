@@ -5,6 +5,7 @@ import GestioneImpianto from './GestioneImpianto.jsx';
 import RegistroModifiche from './RegistroModifiche.jsx';
 import GestioneBacheca from './GestioneBacheca.jsx';
 import GestioneEmail from './GestioneEmail.jsx';
+import GestioneSpese from './GestioneSpese.jsx';
 
 const PAGINE = [
   { chiave: 'utenti', nome: 'Utenti', descrizione: 'Nuovi colleghi, ruoli, link per la password, disattivazione' },
@@ -12,6 +13,7 @@ const PAGINE = [
   { chiave: 'settori', nome: 'Settori', descrizione: 'Nomi, email dei responsabili, chi ne è responsabile' },
   { chiave: 'bacheca', nome: 'Bacheca', descrizione: 'Avvisi al personale: pubblica, modifica, ritira, chi li ha letti' },
   { chiave: 'impianto', nome: 'Impianto e modello Excel', descrizione: 'Indirizzo di invio delle ore, promemoria, nuovo modello Excel' },
+  { chiave: 'spese', nome: 'Spese', descrizione: 'Tipi di spesa, quando partono le spese verso la segreteria' },
   { chiave: 'email', nome: 'Email inviate', descrizione: 'Stato delle email in uscita, errori' },
   { chiave: 'registro', nome: 'Registro delle modifiche', descrizione: 'Chi ha cambiato cosa e quando' },
 ];
@@ -43,6 +45,7 @@ export default function Gestione({ pagina, utente, attivita, onAttivitaCambiate 
   else if (pagina === 'impianto') contenuto = <GestioneImpianto onAttivitaCambiate={onAttivitaCambiate} />;
   else if (pagina === 'bacheca') contenuto = <GestioneBacheca />;
   else if (pagina === 'email') contenuto = <GestioneEmail />;
+  else if (pagina === 'spese') contenuto = <GestioneSpese />;
   else contenuto = <RegistroModifiche />;
   return (
     <div className="contenuto">

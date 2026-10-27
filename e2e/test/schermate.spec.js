@@ -23,6 +23,13 @@ const PAGINE = [
     await page.getByRole('dialog').getByRole('button', { name: /Seleziona giorni/ }).click();
   }],
   ['mese-precedente', '/', {}, (page) => page.getByRole('button', { name: 'Mese precedente' }).click()],
+  ['mese-spese', '/', {}, (page) => page.locator('#titolo-spese').scrollIntoViewIfNeeded()],
+  ['mese-spesa-nuova', '/', {}, async (page) => {
+    await page.getByRole('button', { name: 'Altro' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /Aggiungi una spesa/ }).click();
+  }],
+  ['mese-spesa', '/', {}, (page) => page.locator('.elenco-spese button').first().click()],
+  ['mese-invio', '/', {}, (page) => page.getByRole('button', { name: 'Invia il mese' }).click()],
   ['mese-inviato', '/', { statoMese: 'inviato' }],
   ['bacheca', '/#/bacheca'],
   ['notifiche', '/#/notifiche'],
@@ -37,6 +44,7 @@ const PAGINE = [
   ['gestione-settori', '/#/gestione/settori'],
   ['gestione-bacheca', '/#/gestione/bacheca'],
   ['gestione-impianto', '/#/gestione/impianto'],
+  ['gestione-spese', '/#/gestione/spese'],
   ['gestione-email', '/#/gestione/email'],
   ['gestione-registro', '/#/gestione/registro'],
   ['responsabile-mese', '/', { ruolo: 'responsabile' }],

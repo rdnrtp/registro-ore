@@ -143,6 +143,10 @@ function caricaConfig(env = process.env) {
       intervalloSecondi: intero(env, 'POSTA_INTERVALLO_SECONDI', 5),
       maxTentativi: intero(env, 'POSTA_MAX_TENTATIVI', 8),
     },
+    // Rimborsi spese: dimensione massima del PDF allegato all'email alla
+    // segreteria, in MB. Brevo indica 20 MB per email in tutto e allegati
+    // "sotto i 4 MB": 4 è il valore prudente (vedi RUNBOOK.md).
+    spese: { maxPdfMb: intero(env, 'SPESE_MAX_PDF_MB', 4) },
     // Chi riceve gli avvisi tecnici (backup fallito): comando avviso-sistema.
     allarmiEmail: env.ALLARMI_EMAIL || null,
     push: configPush(env),

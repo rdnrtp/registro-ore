@@ -7,17 +7,20 @@ const { traccia } = require('../traccia');
 const { notifica, linkMese, NOME_APP } = require('../notifiche');
 const { elencoInvii } = require('../invio-mese');
 const { fileExcelMese, fileInviato, inviaFile } = require('./esportazione');
+const { leggiSpese, fileSpeseMese, fileSpeseVersione, fileSpesaInviata, fileAllegato, inviaAllegato } = require('../spese/invio');
 
 // Un sollecito alla stessa persona per lo stesso mese non prima di:
 const PAUSA_SOLLECITI_MINUTI = 10;
 
 // Viste in sola lettura sui mesi degli altri utenti.
 // - Amministratore: tutti gli utenti dell'organizzazione, tutte le righe,
-//   sedute PT comprese, il file Excel di chiunque, le versioni inviate; in più
-//   riapre un mese inviato e sollecita chi non ha ancora inviato.
+//   sedute PT comprese, il file Excel di chiunque, le versioni inviate, le
+//   spese con le ricevute e il loro PDF; in più riapre un mese inviato e
+//   sollecita chi non ha ancora inviato.
 // - Responsabile: solo chi nel mese ha registrazioni su attività dei suoi
 //   settori, e di ciascuno solo quelle righe. Niente sedute PT con il nome
-//   del cliente (non sono legate a un settore) e niente file Excel.
+//   del cliente (non sono legate a un settore), niente spese (le ricevute
+//   possono contenere dati personali) e niente file Excel.
 // Nessuna rotta qui modifica le registrazioni: le cambia solo il titolare.
 function rotteCollaboratori({ pool, config }) {
   const router = express.Router();
@@ -116,7 +119,7 @@ function rotteCollaboratori({ pool, config }) {
       [req.params.id, p1],
     );
     if (!utente.rows[0]) throw nonTrovato();
-    const [registrazioni, sedute, stato, org, invii] = await Promise.all([
+    const [registrazioni, sedute, stato, org, invii, spese] = await Promise.all([
       pool.query(
         `SELECT entry_date AS data, activity_id AS attivita_id, quantity AS quantita
            FROM time_entries
@@ -142,6 +145,7 @@ function rotteCollaboratori({ pool, config }) {
       ),
       pool.query('SELECT pt_sessions_per_kind FROM organizations WHERE id = $1', [p1]),
       admin ? elencoInvii(pool, { orgId: p1, utenteId: req.params.id, anno, mese }) : null,
+      admin ? leggiSpese(pool, { orgId: p1, utenteId: req.params.id, anno, mese }) : null,
     ]);
     // Il responsabile vede solo chi ha registrazioni nei suoi settori in quel
     // mese: per gli altri la risposta è la stessa di un utente inesistente.
@@ -158,6 +162,8 @@ function rotteCollaboratori({ pool, config }) {
       sedute_pt: sedute ? sedute.rows : null,
       // Versioni inviate con destinatari e stato dell'email: solo amministratore.
       invii,
+      // Spese con le ricevute: solo amministratore (null = non visibili).
+      spese,
       solo_settori_propri: !admin,
     });
   });
@@ -175,6 +181,33 @@ function rotteCollaboratori({ pool, config }) {
       res,
       await fileInviato(pool, { orgId: req.utente.organizzazioneId, utenteId: req.params.id, anno, mese, versione: req.params.versione }),
     );
+  });
+
+  // Spese: PDF del mese (quello inviato, o un'anteprima se il mese è aperto),
+  // PDF di una versione inviata, PDF di una spesa inviata da sola, ricevute.
+  const chiDi = (req) => {
+    if (!isUuid(req.params.id)) throw nonTrovato();
+    return { orgId: req.utente.organizzazioneId, utenteId: req.params.id };
+  };
+  router.get('/collaboratori/:id/mese/:anno/:mese/spese/pdf', soloAdmin, async (req, res) => {
+    const c = chiDi(req);
+    const { anno, mese } = periodo(req.params);
+    inviaFile(res, await fileSpeseMese(pool, { ...c, anno, mese }));
+  });
+  router.get('/collaboratori/:id/mese/:anno/:mese/invii/:versione/spese', soloAdmin, async (req, res) => {
+    const c = chiDi(req);
+    const { anno, mese } = periodo(req.params);
+    inviaFile(res, await fileSpeseVersione(pool, { ...c, anno, mese, versione: req.params.versione }));
+  });
+  router.get('/collaboratori/:id/spese/:spesa/pdf', soloAdmin, async (req, res) => {
+    const c = chiDi(req);
+    if (!isUuid(req.params.spesa)) throw nonTrovato();
+    inviaFile(res, await fileSpesaInviata(pool, { ...c, spesaId: req.params.spesa }));
+  });
+  router.get('/collaboratori/:id/spese/allegati/:allegato', soloAdmin, async (req, res) => {
+    const c = chiDi(req);
+    if (!isUuid(req.params.allegato)) throw nonTrovato();
+    inviaAllegato(res, await fileAllegato(pool, { ...c, allegatoId: req.params.allegato, soloSalvate: true }));
   });
 
   // Blocca la riga dell'utente come fanno le sue modifiche e il suo invio:

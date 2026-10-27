@@ -92,6 +92,18 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
 - Un mese inviato conserva il file esattamente come è partito
   (`month_submission_versions`); dopo una riapertura il reinvio è una nuova
   versione e l'email dice che sostituisce la precedente.
+- Rimborsi spese (dal 27/10/2026): spese di trasferta (data, tipo
+  configurabile, importo in centesimi, motivo, 1–5 ricevute) nella sezione
+  "Spese di trasferta" del mese. Ricevute (foto JPEG/PNG/HEIC o PDF) nel
+  database (`expense_attachments`, `bytea`), quindi nei backup senza altri
+  file; tipo riconosciuto dal contenuto; foto ridotte a 1600 px, sempre
+  JPEG, senza metadati (`sharp`, HEIC con `heic-decode`); PDF tenuti così
+  come sono (`pdf-lib`). Invio solo all'indirizzo dell'organizzazione, in
+  copia l'utente, mai ai responsabili; un PDF unico (riepilogo + ricevute).
+  Modalità dell'organizzazione `expense_send_mode`: `mese` (predefinita,
+  seconda email con l'invio del mese, BV usa questa) o `subito` (ogni spesa
+  appena confermata, poi in sola lettura). Le vedono solo il titolare e
+  l'amministratore. Limite del PDF `SPESE_MAX_PDF_MB` (4, prudente per Brevo).
 
 ## Struttura
 
@@ -120,8 +132,10 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   `backup.sh [giornaliero|rilascio|manuale]` (cartelle `giornalieri`,
   `settimanali`, `mensili` = 7/4/6, `rilasci` = 5, `manuali` = 10, in
   `BACKUP_DIR`; settimanali e mensili sono hard link; `rclone sync` con
-  `--max-delete 10`), `ripristina.sh` (prova in `<db>_prova` con confronto
-  dei conteggi, oppure `--sostituisci`), `scarica-backup.sh`, `rilascia.sh`
+  `--max-delete 10`; controlla che ogni tabella del database abbia i dati
+  nella copia), `ripristina.sh` (prova in `<db>_prova` con confronto dei
+  conteggi, spese e ricevute comprese, e controllo dell'impronta SHA-256 di
+  ogni file salvato nel database; oppure `--sostituisci`), `scarica-backup.sh`, `rilascia.sh`
   (backup, `git checkout --detach` di `origin/HEAD` o del commit indicato,
   build, migra, up, controllo HTTPS; annotato in `.rilasci.log`),
   `torna-indietro.sh [--con-database]`, `genera-chiavi-push.sh` (stampa le
@@ -136,21 +150,25 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   orario tipo, mie attività, sedute PT; `esportazione` = proprio file Excel e
   `fileExcelMese`; `collaboratori` = viste in sola lettura sui mesi degli
   altri, più riapertura e sollecito; `invio` = riepilogo e invio del proprio
-  mese; `bacheca` = avvisi; `utenti`, `configurazione` (attività, settori,
-  organizzazione e promemoria, registro delle modifiche), `modello` e `posta`
+  mese; `spese` = proprie spese e ricevute, tipi di spesa (elenco),
+  `pulisciBozzeSpese`; `bacheca` = avvisi; `utenti`, `configurazione` (attività, settori,
+  tipi di spesa, organizzazione, promemoria e invio delle spese, registro delle modifiche), `modello` e `posta`
   (email in uscita) = gestione, solo amministratore),
   `src/excel/` (`layout.js` = mappa delle celle e sua validazione,
   `foglio-mensile.js` = generatore, `modello.js` = caricamento di un modello:
   righe, confronto con le attività, prova di generazione, nuova versione;
   usato dal comando e dall'app), `src/inviti.js` (creazione dei link e
   loro email), `src/posta/` (`coda.js` = `accodaEmail`, `elaboraCoda`;
-  `trasporto.js` = nodemailer; `messaggi.js` = testi di invito e invio del
-  mese), `src/notifiche.js` (`notifica`, `REGOLE` dei canali,
+  `trasporto.js` = nodemailer; `messaggi.js` = testi di invito, invio del
+  mese e delle spese), `src/spese/` (`allegati.js` = riconoscimento e
+  rielaborazione delle ricevute; `pdf.js` = PDF delle spese; `invio.js` =
+  lettura, riepilogo, invio con il mese o subito, file da scaricare), `src/notifiche.js` (`notifica`, `REGOLE` dei canali,
   `ripiegaSuEmail`, `linkMese`), `src/push/` (`coda.js` = `elaboraCodaPush`;
   `invio.js` = web-push), `routes/push.js` (iscrizioni del dispositivo,
   prova), `src/invio-mese.js`
   (destinatari e versioni inviate), `src/promemoria.js`, `src/avvio.js`
-  (lavori in sottofondo: coda email e promemoria, avviati da `server.js`),
+  (lavori in sottofondo: code email e push, promemoria, pulizia delle
+  ricevute mai salvate; avviati da `server.js`),
   `src/tempo.js` (ora italiana),
   `src/traccia.js` (`audit_log`), `src/errori.js` (`ErroreHttp`),
   `src/validazione.js` (uuid, date, mesi, testi, email), `src/db.js`
@@ -187,23 +205,26 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   `#/notifiche` = `Notifiche.jsx` (pulsante "Notifiche" nella barra in alto,
   accanto a "Esci"; logica del browser in `push.js`), `#/mese/AAAA/M` = il
   proprio mese indicato (link di notifiche ed email; Indietro torna a `#/`),
-  `#/gestione[/utenti|attivita|settori|bacheca|impianto|email|registro]` =
+  `#/gestione[/utenti|attivita|settori|bacheca|impianto|spese|email|registro]` =
   `Gestione.jsx` e `Gestione*.jsx`, `RegistroModifiche.jsx`. `VistaMese.jsx`
   = parti comuni alle viste del mese (elenco dei giorni, totali, `salvaFile`);
   `StatoInvio.jsx` = "Storico degli invii" (stato attuale, ogni versione con
-  data e ora, sostituzione, motivazione della riapertura, file da scaricare),
+  data e ora, sostituzione, motivazione della riapertura, file da scaricare,
+  spese partite con quella versione e il loro PDF),
   in cima alla vista del mese, sopra i giorni: nel proprio mese e, solo per
   l'amministratore, nel mese di un collega. Testata del mese (fissa in alto):
   titolo con le frecce e `.totale-mese` (ore in grande, sedute, stato,
   "Oggi"); sotto, `.comandi-mese` (pulsanti alti uguali, 48 px): "Invia il
   mese" (verde) + "Altro", che apre un `Foglio` con Scarica Excel, Precompila
-  il mese, "Annulla precompilazione" (solo se c'è qualcosa da annullare) e
+  il mese, "Annulla precompilazione" (solo se c'è qualcosa da annullare),
+  "Aggiungi una spesa" (non nei mesi futuri) e
   "Seleziona giorni" (modalità di selezione di `ElencoGiorni` con
   `selezionati`, barra in basso con "Tutto il mese", "Svuota", "Fine"); mese
   inviato = solo "Scarica Excel". Stessa testata nel mese di un collega e
   nell'elenco dei collaboratori. Aree di tocco di almeno 44 px (controllate
   dagli screenshot di `e2e`; eccezioni: caselle di spunta dentro etichette
-  alte, frecce ↑↓ di Gestione → Attività a 38 px). "Svuota giorno" nella
+  alte, frecce ↑↓ di Gestione → Attività a 38 px, campi file invisibili
+  dentro le etichette "Scatta foto"/"Scegli file" alte 48 px). "Svuota giorno" nella
   scheda del giorno.
   CSS: le regole di `.elenco-persone a, button` rendono ogni elemento largo
   quanto la riga; per un pulsante dentro una riga (es. "Sollecita" nel quadro)
@@ -211,10 +232,14 @@ l'inserimento dal telefono e produrre un file identico nell'aspetto all'original
   `SchedaGiorno.jsx`, la precompilazione e le schede di gestione usano
   `Foglio.jsx` (pannello dal basso, si chiude anche con Indietro); `EditorQuantita.jsx` (contatori − valore
   + ) serve sia alla scheda del giorno sia all'orario tipo; `SedutePt.jsx`
-  (aggiunta, modifica, eliminazione); `date.js` (date come stringhe
+  (aggiunta, modifica, eliminazione); `Spese.jsx` (sezione del proprio
+  mese, `ElencoSpese` e `SpesaDelCollega` anche per il mese di un collega;
+  la scheda carica ogni ricevuta appena scelta e, se si annulla, cancella
+  quelle caricate; "Scatta foto" = `<input capture="environment">`);
+  `GestioneSpese.jsx` (modalità di invio, tipi di spesa); `date.js` (date come stringhe
   'AAAA-MM-GG', oggi = fuso Europe/Rome); `api.js` (un 401 riporta al login;
   `excelMese`/`excelDi` scaricano il file come blob; `caricaModello` manda il
-  file come corpo della richiesta).
+  file come corpo della richiesta, come `caricaRicevuta`).
 - `e2e/`: prove nel browser con Playwright (Chromium come Chrome su
   Android, immagine `mcr.microsoft.com/playwright`, stessa versione di
   `@playwright/test`) contro il frontend compilato servito da `web`, con
@@ -436,8 +461,8 @@ mai modificare uno già applicato.
   `SELECT ... FROM users ... FOR NO KEY UPDATE` sulla riga dell'utente: le
   richieste dello stesso utente vanno in fila, così i controlli (24 ore al
   giorno, limite sedute, mese inviato) non si aggirano con richieste parallele.
-- Mese con `month_submissions.status = 'inviato'`: ogni modifica di ore e
-  sedute di quel mese risponde 409. Il blocco è nell'API, non nel database.
+- Mese con `month_submissions.status = 'inviato'`: ogni modifica di ore,
+  sedute e spese di quel mese risponde 409. Il blocco è nell'API, non nel database.
 - Email: solo con `accodaEmail` (o `notifica`), nella stessa transazione della
   modifica che le causa; mai `sendMail` dentro una richiesta. Nei testi il
   minimo di dati personali (nome, mese; niente ore giorno per giorno né
@@ -673,6 +698,82 @@ Coda e promemoria (`src/posta/coda.js`, `src/promemoria.js`):
   isolamento). Il servizio push finto è `servizioPushFinto()` in `helpers.js`;
   le chiavi di prova sono in `configTest.push`.
 
+## Rimborsi spese (`src/routes/spese.js`, `src/spese/`, migrazione 013)
+
+Schema (`013_spese.sql`):
+
+- `organizations.expense_send_mode` ('mese' | 'subito').
+- `expense_types` (nome unico, `sort_order`, `active`; non si eliminano).
+  Valori iniziali Pedaggio, Carburante, Parcheggio, Pasto, Altro: inseriti
+  dalla migrazione per gli impianti esistenti e da un trigger su
+  `organizations` per quelli nuovi.
+- `expenses` (utente, `expense_date`, `type_id`, `amount_cents` 1–1.000.000,
+  `reason` ≤ 300, `submission_id` = inviata da sola, modalità "subito").
+- `expense_attachments` (`expense_id` null = bozza, caricata ma spesa non
+  salvata, cancellata dopo un giorno; `position` 0–4; `content_type`
+  'image/jpeg' | 'application/pdf'; `file` bytea, `size`, `sha256`, `pages`).
+- `expense_submissions`: ogni invio di spese, immutabile (trigger), con il PDF
+  così com'è partito; `mode` 'mese' (`month_submission_id` = versione del
+  mese; `file` null = "annulla le spese inviate prima") o 'subito'.
+  `email_outbox.attachment_expense_submission_id` = PDF allegato.
+
+API (tutti, sulle proprie spese; l'utente è sempre `req.utente.id`):
+
+- `GET /api/tipi-spesa`, `GET /api/mese/:anno/:mese/spese` → `{ modalita,
+  spese: [{ id, data, tipo_id, tipo, importo_centesimi, motivo, inviata:
+  null | { il, email }, allegati: [{ id, tipo, nome, dimensione, pagine }] }],
+  totale_centesimi, dimensione_ricevute, limite }`.
+- `POST /api/spese/allegati` (corpo = file, `X-Nome-File`, fino a 20 MB):
+  tipo dai primi byte (JPEG, PNG, HEIC/HEIF, PDF; GIF, WebP, AVIF, Office e
+  altro rifiutati); foto raddrizzate, ridotte a 1600 px, JPEG q80 senza
+  metadati (oltre 50 MP rifiutate); PDF non protetti, ≤ 20 pagine, ≤ limite
+  dell'email meno 96 KB, verificati copiandone le pagine. Al massimo 30
+  bozze per utente (429). `DELETE /api/spese/allegati/:id` (solo bozze),
+  `GET /api/spese/allegati/:id` (foto inline, PDF come allegato,
+  `Cache-Control: private, no-store`, CSP `sandbox`).
+- `POST /api/spese`, `PUT /api/spese/:id` `{ data (non futura), tipo_id
+  (attivo, o quello che aveva), importo_centesimi, motivo, allegati: [1–5
+  id] }` (l'ordine dell'elenco è quello nel PDF; le ricevute tolte vengono
+  cancellate), `DELETE /api/spese/:id`. 409 con il mese inviato (entrambi i
+  mesi nella modifica) o con la spesa già inviata da sola. Le ricevute
+  delle spese non ancora inviate del mese (o della sola spesa, "subito")
+  devono stare nel limite dell'email, altrimenti 400; al massimo 60 spese al
+  mese. In modalità "subito" salvare = inviare (`inviaSpesaSubito`, nella
+  stessa transazione).
+- PDF: `GET /api/mese/:anno/:mese/spese/pdf` (inviato con l'ultima versione
+  se il mese è inviato, altrimenti anteprima delle spese non ancora
+  inviate), `GET /api/mese/:anno/:mese/invii/:versione/spese`,
+  `GET /api/spese/:id/pdf` (spesa inviata da sola).
+- Invio del mese (`invio.js`): il riepilogo ha `spese` (null = nessuna
+  email; `{ numero, totale_centesimi, nome_file, dimensione, limite,
+  troppo_grande, destinatario, copia, sostituisce, annulla }`); il POST, se
+  ci sono spese non ancora inviate o se il precedente invio ne aveva,
+  accoda una seconda email (`invio_spese`) all'indirizzo dell'organizzazione
+  e in copia all'utente, oggetto "Spese di <mese> – Nome Cognome", con
+  "SOSTITUISCE IL PRECEDENTE – " / "ANNULLA IL PRECEDENTE – " e In-Reply-To
+  dopo una riapertura. PDF oltre il limite = 409 e il mese resta aperto.
+  `elencoInvii` ha `spese` per versione. Nome del file
+  `Spese_<Mese>_<AAAA>_<Cognome>.pdf`, "subito" `Spesa_<AAAA-MM-GG>_<Cognome>.pdf`.
+- PDF (`pdf.js`): A4, riepilogo (N., data, tipo, motivo, importo, pagine
+  delle ricevute, totale), poi ogni foto su una pagina (orizzontale se la
+  foto lo è) con intestazione, poi i PDF con tutte le loro pagine. Caratteri
+  standard (WinAnsi): `testoPdf` sostituisce i caratteri che non ci stanno.
+  pdf-lib legge dal buffer sottostante: i Buffer del database vanno copiati
+  (`new Uint8Array(buf)`), altrimenti "SOI not found in JPEG".
+- Amministratore (`collaboratori.js`): `GET …/collaboratori/:id/mese/:a/:m`
+  ha `spese` (null per il responsabile); `GET …/:id/mese/:a/:m/spese/pdf`,
+  `…/invii/:versione/spese`, `…/:id/spese/:spesa/pdf`,
+  `…/:id/spese/allegati/:allegato` (non le bozze). `POST /api/tipi-spesa`
+  `{ nome }`, `PATCH /api/tipi-spesa/:id` `{ nome?, attivo? }` (tracce
+  `tipo_spesa.*`), `PATCH /api/organizzazione` `{ invio_spese }`.
+- Test: `test/spese.test.js` (sul modello reale di BV: tipi di file,
+  HEIC, GPS e orientamento, limiti, validazioni, riepilogo, due email,
+  sola lettura, riapertura con SOSTITUISCE e ANNULLA, PDF troppo grande,
+  modalità "subito", permessi, isolamento, `pg_dump`/`pg_restore` delle
+  ricevute, pulizia delle bozze) e `isolamento.test.js`. La foto HEIC di
+  prova (sintetica, con EXIF e GPS) è `test/file/ricevuta.heic`, creata con
+  `heif-enc` di libheif. `api-test` ha `postgresql17-client`.
+
 ## Esportazione Excel (Fase 3, `src/routes/esportazione.js`, `src/excel/`)
 
 - `GET /api/mese/:anno/:mese/excel` → file `.xlsx` del mese dell'utente
@@ -750,8 +851,8 @@ Coda e promemoria (`src/posta/coda.js`, `src/promemoria.js`):
    server c'è un `contatti.json` **di prova** (tutti gli indirizzi sono di
    rdnrtp@gmail.com, con `+settore`): nessuna email può arrivare a BV. Il
    passaggio agli indirizzi reali è RUNBOOK 11.2, solo dopo il via libera.
-   Fase 6b, notifiche push: sviluppata il 15/10/2026 (diario in
-   `deploy/PROGRESSO.md`).
+   Fase 6b, notifiche push: rilasciata (`42916f5`), provata dal telefono.
+   Rimborsi spese: sviluppati il 27/10/2026 (diario in `deploy/PROGRESSO.md`).
 7. Riepilogo per la direzione
 
 Lavora una fase alla volta e fermati alla fine di ciascuna per il resoconto.
@@ -759,18 +860,20 @@ Lavora una fase alla volta e fermati alla fine di ciascuna per il resoconto.
 Punti aperti della Fase 6:
 
 - Prima dei colleghi: indirizzi reali di BV (RUNBOOK 11.2), disattivare
-  l'utente "Prova Uno", monitoraggio di `/api/stato` e Healthchecks per il
-  backup (RUNBOOK 10), DMARC di `apetris.com` più severo (`p=quarantine`)
+  l'utente "Prova Uno" (monitoraggio di `/api/stato` su Better Stack e
+  Healthchecks per il backup: attivi), DMARC di `apetris.com` più severo (`p=quarantine`)
   se oggi è `p=none`, dopo qualche settimana senza problemi.
 
 - Informativa sulla privacy (`frontend/src/Privacy.jsx`): bozza con le parti
   `<Dc>` da completare; titolare BV, da far verificare al loro consulente. Il
   testo è unico per installazione (non è configurazione di un'organizzazione).
 - Conservazione: oggi nessun dato viene cancellato automaticamente (ore,
-  sedute PT con i nomi dei clienti, file inviati, email in `email_outbox`,
-  notifiche, `audit_log`). Manca una funzione per cancellare o rendere anonimo
+  spese e ricevute, sedute PT con i nomi dei clienti, file inviati, email in
+  `email_outbox`, notifiche, `audit_log`); solo le ricevute caricate e mai
+  salvate in una spesa spariscono dopo un giorno. Manca una funzione per cancellare o rendere anonimo
   un collaboratore che lascia, dopo i tempi di conservazione decisi da BV:
-  `DELETE FROM users` cancellerebbe a cascata anche i file inviati, ed è
+  `DELETE FROM users` cancellerebbe a cascata anche i file inviati (e le
+  spese con le ricevute), ed è
   bloccato per chi compare come autore (`audit_log.actor_id`, avvisi,
   riaperture). I backup conservano i dati cancellati per altri 6 mesi.
 - Log dei container ruotati per dimensione (5×10 MB), non per tempo: nginx

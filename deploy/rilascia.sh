@@ -60,6 +60,13 @@ dc run --rm --no-deps api npm run --silent migra
 
 info "5/6 Riavvio dell'app"
 dc up -d --remove-orphans --wait
+# Il Caddyfile è montato come singolo file: git lo sostituisce con un file
+# nuovo e Caddy continuerebbe a leggere quello vecchio. Se è cambiato, Caddy
+# si ricrea (pochi secondi senza risposta).
+if ! git diff --quiet "$PRIMA" "$DOPO" -- deploy/Caddyfile; then
+  info "Il Caddyfile è cambiato: ricreo Caddy"
+  dc up -d --force-recreate --wait caddy
+fi
 
 info "6/6 Controllo che l'app risponda"
 attendi_app 180 || { errore "l'app non risponde in HTTPS"; false; }

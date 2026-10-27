@@ -24,15 +24,15 @@ const ritardoSecondi = (tentativi) => Math.min(60 * 2 ** Math.max(tentativi - 1,
 
 // email: { organizzazioneId, tipo, utenteId?, notificaId?, nomeMittente,
 //          rispondiA?, a: [indirizzi], cc?: [indirizzi], oggetto, testo,
-//          allegatoInvioId?, riferimentoId?, riservata? }
+//          allegatoInvioId?, allegatoSpeseId?, riferimentoId?, riservata? }
 // Restituisce l'id della riga.
 async function accodaEmail(db, e) {
   if (!e.a?.length) throw new Error('Email senza destinatari');
   const { rows } = await db.query(
     `INSERT INTO email_outbox
        (organization_id, kind, user_id, notification_id, from_name, reply_to, to_addresses, cc_addresses,
-        subject, body_text, attachment_submission_id, references_id, sensitive)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        subject, body_text, attachment_submission_id, attachment_expense_submission_id, references_id, sensitive)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING id`,
     [
       e.organizzazioneId,
@@ -46,6 +46,7 @@ async function accodaEmail(db, e) {
       e.oggetto,
       e.testo,
       e.allegatoInvioId ?? null,
+      e.allegatoSpeseId ?? null,
       e.riferimentoId ?? null,
       e.riservata ?? false,
     ],
@@ -91,7 +92,7 @@ async function prenota(pool) {
               locked_until = now() + make_interval(mins => $2)
         WHERE id = $1
         RETURNING id, from_name, reply_to, to_addresses, cc_addresses, subject, body_text,
-                  attachment_submission_id, references_id, attempts`,
+                  attachment_submission_id, attachment_expense_submission_id, references_id, attempts`,
       [rows[0].id, DURATA_INVIO_MINUTI],
     );
     await client.query('COMMIT');
@@ -133,6 +134,14 @@ async function componiMessaggio(pool, riga, config) {
         contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       },
     ];
+  }
+  // PDF delle spese (null = invio che annulla le spese precedenti, senza allegato).
+  if (riga.attachment_expense_submission_id) {
+    const { rows } = await pool.query('SELECT file, file_name FROM expense_submissions WHERE id = $1', [
+      riga.attachment_expense_submission_id,
+    ]);
+    if (!rows[0]) throw new Error('Allegato non trovato');
+    if (rows[0].file) messaggio.attachments = [{ filename: rows[0].file_name, content: rows[0].file, contentType: 'application/pdf' }];
   }
   return messaggio;
 }

@@ -10,7 +10,9 @@
 #
 # Cosa fa:
 #   1. pg_dump del database (formato "custom" di PostgreSQL, già compresso);
-#   2. controlla che la copia sia leggibile (pg_restore --list);
+#   2. controlla che la copia sia leggibile (pg_restore --list) e contenga i
+#      dati di ogni tabella (ricevute delle spese e file inviati compresi:
+#      stanno nel database, non ci sono altri file da salvare);
 #   3. la cifra con age e la CHIAVE PUBBLICA (BACKUP_CHIAVE_PUBBLICA): sul
 #      server non c'è la chiave privata, quindi nemmeno chi entrasse nel
 #      server potrebbe leggere i backup;
@@ -101,9 +103,18 @@ info "Backup $TIPO del database $DB"
 # 1-2. Copia in chiaro solo in memoria (/dev/shm), per il controllo.
 CHIARO="$(mktemp -p /dev/shm registro-ore.XXXXXX)"
 dc exec -T db pg_dump -U "$UTENTE_DB" -d "$DB" --format=custom --compress=6 > "$CHIARO"
-TABELLE="$(dc exec -T db pg_restore --list < "$CHIARO" | grep -c ' TABLE DATA ' || true)"
+ELENCO="$(dc exec -T db pg_restore --list < "$CHIARO")"
+TABELLE="$(grep -c ' TABLE DATA ' <<< "$ELENCO" || true)"
 (( TABELLE > 0 )) || { errore "la copia non contiene tabelle"; false; }
-info "Copia letta correttamente: $TABELLE tabelle, $(du -h "$CHIARO" | cut -f1)"
+# Ogni tabella del database deve avere i suoi dati nella copia: anche le
+# ricevute delle spese e i file inviati, che stanno nel database.
+while IFS= read -r tabella; do
+  [[ -z "$tabella" ]] && continue
+  grep -q " TABLE DATA public $tabella " <<< "$ELENCO" || { errore "la copia non contiene i dati della tabella $tabella"; false; }
+done < <(dc exec -T db psql -U "$UTENTE_DB" -d "$DB" -At -c "SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+RICEVUTE="$(dc exec -T db psql -U "$UTENTE_DB" -d "$DB" -At -c \
+  "SELECT CASE WHEN to_regclass('public.expense_attachments') IS NULL THEN 'nessuna' ELSE (SELECT count(*) FROM expense_attachments)::text END")"
+info "Copia letta correttamente: $TABELLE tabelle (ricevute delle spese: $RICEVUTE), $(du -h "$CHIARO" | cut -f1)"
 
 # 3. Cifratura; il file compare con il nome definitivo solo se è completo.
 age -r "$CHIAVE" -o "$DEST.parziale" "$CHIARO"

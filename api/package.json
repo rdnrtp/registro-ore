@@ -22,9 +22,12 @@
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.1",
+    "heic-decode": "^2.1.0",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^10.0.16",
+    "pdf-lib": "^1.17.1",
     "pg": "^8.23.1",
+    "sharp": "^0.35.5",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

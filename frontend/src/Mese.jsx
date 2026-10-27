@@ -4,6 +4,7 @@ import { NOMI_MESI, etichettaData, maiuscola, meseVicino, numero, oggiIso } from
 import Foglio from './Foglio.jsx';
 import SchedaGiorno from './SchedaGiorno.jsx';
 import SedutePt from './SedutePt.jsx';
+import Spese, { euro, mb } from './Spese.jsx';
 import StatoInvio from './StatoInvio.jsx';
 import { dataOra } from './GestioneUtenti.jsx';
 import { ElencoGiorni, NavigazioneMese, TotaliMese, salvaFile, usaRiepilogo } from './VistaMese.jsx';
@@ -31,6 +32,7 @@ export default function Mese({ attivita, mie, iniziale }) {
   const [svuotamento, setSvuotamento] = useState(false); // conferma dello svuotamento
   const [attesa, setAttesa] = useState(false);
   const [menu, setMenu] = useState(false); // pannello "Altro"
+  const [nuovaSpesa, setNuovaSpesa] = useState(0); // cresce per aprire una spesa nuova
   const rifOggi = useRef(null);
   const daPosizionare = useRef(true);
   const { anno, mese } = periodo;
@@ -145,6 +147,16 @@ export default function Mese({ attivita, mie, iniziale }) {
     try {
       const { blob, nomeFile } = await api.fileInviato(anno, mese, versione);
       salvaFile(blob, nomeFile ?? `${anno}-${mese}.xlsx`);
+    } catch (err) {
+      setErrore(err.message);
+    }
+  }
+
+  async function scaricaSpeseVersione(versione) {
+    setErrore('');
+    try {
+      const { blob, nomeFile } = await api.pdfSpeseInviato(anno, mese, versione);
+      salvaFile(blob, nomeFile ?? `Spese_${anno}_${mese}.pdf`);
     } catch (err) {
       setErrore(err.message);
     }
@@ -303,7 +315,7 @@ export default function Mese({ attivita, mie, iniziale }) {
       {!dati && !errore && <p className="caricamento">Caricamento…</p>}
       {dati && (
         <>
-          <StatoInvio stato={dati.stato} invii={dati.invii} io onScarica={scaricaVersione} />
+          <StatoInvio stato={dati.stato} invii={dati.invii} io onScarica={scaricaVersione} onScaricaSpese={scaricaSpeseVersione} />
 
           {selezione && (
             <p className="avviso riquadro">Tocca i giorni da svuotare, poi «Svuota» in basso. Le sedute PT con il nome del cliente non vengono toccate.</p>
@@ -331,6 +343,8 @@ export default function Mese({ attivita, mie, iniziale }) {
             solaLettura={solaLettura}
             onCambiate={ricarica}
           />
+
+          <Spese anno={anno} mese={mese} oggi={oggi} solaLettura={solaLettura} nuova={nuovaSpesa} aggiorna={versione} />
         </>
       )}
 
@@ -377,6 +391,14 @@ export default function Mese({ attivita, mie, iniziale }) {
                 <button type="button" onClick={dalMenu(apriAnnullamento)}>
                   <b>Annulla precompilazione</b>
                   <small>Toglie quello che l&apos;ultima precompilazione ha inserito e non hai modificato</small>
+                </button>
+              </li>
+            )}
+            {`${anno}-${String(mese).padStart(2, '0')}` <= oggi.slice(0, 7) && (
+              <li>
+                <button type="button" onClick={dalMenu(() => setNuovaSpesa((n) => n + 1))}>
+                  <b>Aggiungi una spesa</b>
+                  <small>Pedaggio, carburante, parcheggio, pasto: con la foto della ricevuta</small>
                 </button>
               </li>
             )}
@@ -558,9 +580,9 @@ export default function Mese({ attivita, mie, iniziale }) {
 }
 
 // Riepilogo prima dell'invio: cosa parte e a chi. Gli avvisi (mese non finito,
-// mese vuoto) non impediscono di inviare.
+// mese vuoto) non impediscono di inviare; un PDF delle spese troppo grande sì.
 function RiepilogoInvio({ invio, nomeMese, inviando, onChiudi, onConferma }) {
-  const { totali, avvisi } = invio;
+  const { totali, avvisi, spese } = invio;
   return (
     <Foglio
       titolo={invio.sostituisce ? 'Invia di nuovo il mese' : 'Invia il mese'}
@@ -570,7 +592,7 @@ function RiepilogoInvio({ invio, nomeMese, inviando, onChiudi, onConferma }) {
           <button type="button" className="neutro" onClick={onChiudi}>
             Annulla
           </button>
-          <button type="button" onClick={onConferma} disabled={inviando || !invio.destinatario}>
+          <button type="button" onClick={onConferma} disabled={inviando || !invio.destinatario || spese?.troppo_grande}>
             {inviando ? 'Invio…' : 'Invia'}
           </button>
         </div>
@@ -640,6 +662,58 @@ function RiepilogoInvio({ invio, nomeMese, inviando, onChiudi, onConferma }) {
         In copia vanno i responsabili dei settori delle attività su cui hai registrato ore in {nomeMese}, più te. Dopo l&apos;invio il
         mese diventa di sola lettura.
       </p>
+      {spese && <RiepilogoSpese spese={spese} />}
     </Foglio>
+  );
+}
+
+// Seconda email, solo alla segreteria: il PDF delle spese.
+function RiepilogoSpese({ spese }) {
+  return (
+    <div className="riepilogo-spese">
+      <h3>Spese da rimborsare: seconda email</h3>
+      {spese.annulla ? (
+        <p className="avviso">
+          Nel mese non ci sono più spese: una seconda email avviserà la segreteria che le spese inviate prima non valgono più.
+        </p>
+      ) : (
+        <>
+          {spese.troppo_grande && (
+            <p className="errore" role="alert">
+              Il PDF delle spese è di {mb(spese.dimensione)}: l&apos;email ne può portare al massimo {mb(spese.limite)}. Togli qualche
+              ricevuta in PDF o sostituiscila con una foto, poi riprova.
+            </p>
+          )}
+          {spese.sostituisce && <p className="avviso">Le spese inviate prima saranno sostituite da queste: l&apos;email lo dirà.</p>}
+          <table className="totali riepilogo-invio">
+            <tbody>
+              <tr>
+                <th scope="row">Spese</th>
+                <td>{spese.numero}</td>
+              </tr>
+              <tr>
+                <th scope="row">Totale</th>
+                <td>{euro(spese.totale_centesimi)}</td>
+              </tr>
+              <tr>
+                <th scope="row">Allegato</th>
+                <td className="a-capo">
+                  {spese.nome_file} ({mb(spese.dimensione)})
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">A</th>
+                <td className="a-capo">{spese.destinatario}</td>
+              </tr>
+              <tr>
+                <th scope="row">In copia</th>
+                <td className="a-capo">{spese.copia.join(', ') || '—'}</td>
+              </tr>
+            </tbody>
+          </table>
+        </>
+      )}
+      <p className="dettaglio">Le ricevute possono contenere dati personali: questa email non va ai responsabili di settore.</p>
+    </div>
   );
 }

@@ -150,4 +150,4 @@ async function generaFoglioMensile(modello, layout, dati) {
   return { buffer, nomeFile: nomeFileMensile(layout, dati), totaleFile };
 }
 
-module.exports = { generaFoglioMensile, nomeFileMensile, ErroreModello };
+module.exports = { generaFoglioMensile, nomeFileMensile, perNomeFile, ErroreModello };

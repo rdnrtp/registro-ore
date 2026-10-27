@@ -1,10 +1,11 @@
 // Lavori in sottofondo dell'API: invio delle email e delle push in coda,
-// promemoria. Ogni lavoro gira a intervalli e non si sovrappone a sé stesso.
+// promemoria, pulizia delle ricevute caricate e mai salvate. Ogni lavoro gira a intervalli e non si sovrappone a sé stesso.
 const { elaboraCoda } = require('./posta/coda');
 const { creaTrasporto } = require('./posta/trasporto');
 const { elaboraCodaPush } = require('./push/coda');
 const { creaInvioPush } = require('./push/invio');
 const { eseguiPromemoria } = require('./promemoria');
+const { pulisciBozzeSpese } = require('./routes/spese');
 
 // Ultimo giro concluso di ogni lavoro (anche con errore): lo legge /api/stato
 // per accorgersi di un lavoro fermo. Vuoto finché i lavori non partono (test).
@@ -56,6 +57,13 @@ function avviaLavori(pool, config) {
     ripeti('Promemoria', config.promemoriaIntervalloSecondi, async () => {
       const esiti = await eseguiPromemoria(pool, config);
       for (const e of esiti.filter((x) => x.esito === 'inviati')) console.log(`Promemoria ${e.organizzazione} del ${e.data}: ${e.destinatari.length} destinatari`);
+    }),
+  );
+  fermate.push(
+    // Ogni minuto come gli altri: /api/stato considera fermo un lavoro senza giri da 5 minuti.
+    ripeti('Pulizia ricevute', 60, async () => {
+      const n = await pulisciBozzeSpese(pool);
+      if (n) console.log(`Ricevute caricate e mai salvate cancellate: ${n}`);
     }),
   );
   return () => fermate.forEach((f) => f());

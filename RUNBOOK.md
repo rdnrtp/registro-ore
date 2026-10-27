@@ -502,6 +502,10 @@ server$ ./deploy/backup.sh manuale
 server$ ./deploy/scarica-backup.sh
 ```
 
+Le ricevute delle spese stanno nel database: il backup le contiene già
+(`backup.sh` controlla che ogni tabella sia nella copia e scrive quante
+ricevute ha salvato), non ci sono altre cartelle da copiare.
+
 Il primo deve dire "Copia fuori dal server completata"; il secondo elenca le
 copie remote. Per Backblaze B2 vanno bene `PROVIDER=Other` e l'endpoint S3
 del bucket (con `https://`); il keyID è `ACCESS_KEY_ID`, l'applicationKey è
@@ -528,7 +532,10 @@ prima di fare qualsiasi cosa: incolla solo la riga `AGE-SECRET-KEY-1…` e premi
 Invio (non si vede nulla, nemmeno asterischi). Chiave sbagliata = si ferma
 senza toccare niente. Lo script ripristina in un database separato, mostra
 una tabella con i conteggi del backup accanto a quelli attuali (devono essere
-uguali o quasi) e finisce con **PROVA RIUSCITA**. **Copia prima la tabella**
+uguali o quasi; ci sono anche spese, ricevute e loro dimensione in KB),
+controlla che ogni file salvato nel database (ricevute delle spese, file
+Excel e PDF inviati) corrisponda alla sua impronta ("tutti integri") e
+finisce con **PROVA RIUSCITA**. **Copia prima la tabella**
 (per annotare l'esito), **poi** chiudi il terminale e svuota gli appunti.
 Infine:
 
@@ -605,8 +612,8 @@ Healthchecks.io (piano gratuito):
 ### 11.1 Fase di prova: nessuna email a BV
 
 L'app spedisce solo a: l'indirizzo di invio dell'organizzazione, gli
-indirizzi dei responsabili dei settori (in copia all'invio del mese), gli
-utenti creati nell'app e `ALLARMI_EMAIL`. Per la prova:
+indirizzi dei responsabili dei settori (in copia all'invio del mese; mai
+all'email delle spese), gli utenti creati nell'app e `ALLARMI_EMAIL`. Per la prova:
 
 - sul server `seed/bv/contatti.json` è un file **di prova**: `emailInvio` =
   «TUA_EMAIL» e ogni responsabile = `«nome»+«settore»@gmail.com` (arriva
@@ -686,7 +693,9 @@ Tutti i comandi dalla cartella dell'app: `cd /opt/registro-ore`.
 | simulare i promemoria di un giorno | `./deploy/compose.sh exec api npm run simula-promemoria -- --org bv --data 2026-10-25` |
 | link per la password di un utente, senza email (12.1) | `./deploy/compose.sh exec api npm run link-password -- --email «EMAIL»` |
 
-Una volta al mese: `./deploy/compose.sh ps`, `df -h /` (sotto l'80%),
+Una volta al mese: `./deploy/compose.sh ps`, `df -h /` (sotto l'80%; le
+ricevute delle spese fanno crescere database e backup: circa 0,3 MB per
+foto),
 **Gestione → Email inviate** senza errori, il backup più recente in
 `ls /var/backups/registro-ore/giornalieri`. Ogni 3 mesi: prova di
 ripristino (9.3).
@@ -756,7 +765,30 @@ notifica, gli altri per email; la riapertura di un mese arriva sempre anche
 per email. Dalle 22 alle 7 nessuna notifica: partono alle 7. In **Gestione →
 Utenti** compare "Notifiche push attive" accanto a chi le ha.
 
-### 13.2 Se qualcosa va storto: tornare indietro
+### 13.2 Prima volta con i rimborsi spese (27/10/2026)
+
+Nessuna variabile nuova obbligatoria in `.env.production`. Facoltativa:
+`SPESE_MAX_PDF_MB` (predefinita 4) = dimensione massima del PDF delle spese
+allegato all'email. Brevo, nella guida delle email transazionali, indica 20 MB
+in tutto per email e allegati "sotto i 4 MB"; la pagina commerciale parla di
+25 MB. Per questo il valore è prudente: oltre, l'app rifiuta l'invio con un
+messaggio chiaro invece di lasciarlo fallire. Per alzarlo, prima una prova:
+una spesa con un PDF di circa 3,5 MB inviata al proprio indirizzo, poi
+controllare in Brevo e nella casella che sia arrivata con l'allegato.
+
+Il rilascio cambia anche il `deploy/Caddyfile` (foto fino a 20 MB). Da
+questa versione `rilascia.sh` ricrea Caddy quando il Caddyfile cambia; **il
+primo rilascio però gira con lo script vecchio**, quindi dopo **RILASCIO
+COMPLETATO**:
+
+```
+server$ ./deploy/compose.sh up -d --force-recreate --wait caddy
+```
+
+(l'app non risponde per qualche secondo). La modalità di invio delle spese e
+i tipi si cambiano da **Gestione → Spese**.
+
+### 13.3 Se qualcosa va storto: tornare indietro
 
 ```
 server$ ./deploy/torna-indietro.sh
@@ -811,7 +843,7 @@ l'accesso); cancella la vecchia deploy key su GitHub.
 |---|---|---|
 | **VPS** | Ubuntu 24.04 LTS; **2 vCPU, 2 GB RAM** (4 GB più comodi), **40 GB SSD**; IPv4 pubblico; centro dati nell'UE; accordo per il trattamento dei dati (GDPR, art. 28) | Un fornitore europeo semplifica l'informativa. Le istantanee (snapshot) del fornitore sono un'utile aggiunta, non sostituiscono i backup. |
 | **Dominio** | Possibilità di creare record A, AAAA, TXT e CNAME | Il più semplice: un sottodominio del sito dell'impianto (es. `ore.nomeimpianto.it`) creato da chi gestisce il loro DNS. |
-| **Servizio SMTP** | Invio con autenticazione su porta 587 (STARTTLS) o 465 (TLS); verifica del dominio con DKIM; dati trattati nell'UE; accordo GDPR; allegati di almeno 1 MB | Il volume è minimo (poche centinaia di email al mese): basta un piano gratuito o di base. |
+| **Servizio SMTP** | Invio con autenticazione su porta 587 (STARTTLS) o 465 (TLS); verifica del dominio con DKIM; dati trattati nell'UE; accordo GDPR; allegati di almeno 4 MB (il PDF delle spese, `SPESE_MAX_PDF_MB`) | Il volume è minimo (poche centinaia di email al mese): basta un piano gratuito o di base. |
 | **Spazio per i backup** | Compatibile S3 (bucket nell'UE, chiavi limitate a un bucket, meglio con versioning/object lock) **oppure** SFTP con accesso a chiave | Di un **fornitore diverso** da quello del VPS. Bastano pochi GB. |
 | **GitHub** | Account gratuito, repository privato | Con autenticazione a due fattori. |
 | **Gestore di password** | Condivisibile con una seconda persona di fiducia dell'impianto | Per non dipendere da una sola persona. |

@@ -14,6 +14,7 @@ const { rotteInvio } = require('./routes/invio');
 const { rottePosta } = require('./routes/posta');
 const { rotteBacheca } = require('./routes/bacheca');
 const { rottePush } = require('./routes/push');
+const { rotteSpese } = require('./routes/spese');
 const { ErroreHttp } = require('./errori');
 const { statoApp } = require('./stato');
 const { ultimiGiri } = require('./avvio');
@@ -70,6 +71,7 @@ function creaApp({ pool, config }) {
   app.use('/api', rottePosta({ pool, config }));
   app.use('/api', rotteBacheca({ pool, config }));
   app.use('/api', rottePush({ pool, config }));
+  app.use('/api', rotteSpese({ pool, config }));
 
   app.use('/api', (req, res) => res.status(404).json({ errore: 'Non trovato' }));
 

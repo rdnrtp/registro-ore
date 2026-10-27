@@ -6,8 +6,8 @@
 //   in pochi secondi: oltre, il server di posta rifiuta o non risponde);
 // - push: nessuna notifica push che doveva partire da più di 30 minuti
 //   (quelle rinviate alle 7 per la fascia di silenzio non contano);
-// - lavori: ogni lavoro in sottofondo (coda email e push, promemoria) ha concluso un
-//   giro negli ultimi 5 minuti.
+// - lavori: ogni lavoro in sottofondo (code email e push, promemoria, pulizia
+//   delle ricevute) ha concluso un giro negli ultimi 5 minuti.
 const POSTA_RITARDO_MINUTI = 30;
 const LAVORI_FERMI_MINUTI = 5;
 

@@ -101,6 +101,24 @@ export const api = {
   modificaSedutaPt: (id, seduta) => chiama(`/sedute-pt/${id}`, json('PUT', seduta)),
   eliminaSedutaPt: (id) => chiama(`/sedute-pt/${id}`, json('DELETE')),
 
+  // Spese di trasferta. La ricevuta va come corpo della richiesta, non in JSON.
+  tipiSpesa: () => chiama('/tipi-spesa'),
+  spese: (anno, mese) => chiama(`/mese/${anno}/${mese}/spese`),
+  caricaRicevuta: (file) =>
+    chiama('/spese/allegati', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream', 'X-Nome-File': encodeURIComponent(file.name) },
+      body: file,
+    }),
+  eliminaRicevuta: (id) => chiama(`/spese/allegati/${id}`, json('DELETE')),
+  aggiungiSpesa: (spesa) => chiama('/spese', json('POST', spesa)),
+  modificaSpesa: (id, spesa) => chiama(`/spese/${id}`, json('PUT', spesa)),
+  eliminaSpesa: (id) => chiama(`/spese/${id}`, json('DELETE')),
+  pdfSpese: (anno, mese) => scaricaFile(`/mese/${anno}/${mese}/spese/pdf`),
+  pdfSpeseInviato: (anno, mese, versione) => scaricaFile(`/mese/${anno}/${mese}/invii/${versione}/spese`),
+  pdfSpesa: (id) => scaricaFile(`/spese/${id}/pdf`),
+  ricevuta: (id) => scaricaFile(`/spese/allegati/${id}`),
+
   // Link di invito (pubblici)
   invito: (codice) => chiama(`/inviti/${encodeURIComponent(codice)}`),
   usaInvito: (codice, password) => chiama(`/inviti/${encodeURIComponent(codice)}`, json('POST', { password })),
@@ -113,6 +131,10 @@ export const api = {
   riapriMese: (id, anno, mese, motivazione) =>
     chiama(`/collaboratori/${id}/mese/${anno}/${mese}/riapertura`, json('POST', { motivazione })),
   sollecita: (id, anno, mese) => chiama(`/collaboratori/${id}/mese/${anno}/${mese}/sollecito`, json('POST')),
+  pdfSpeseDi: (id, anno, mese) => scaricaFile(`/collaboratori/${id}/mese/${anno}/${mese}/spese/pdf`),
+  pdfSpeseInviatoDi: (id, anno, mese, versione) => scaricaFile(`/collaboratori/${id}/mese/${anno}/${mese}/invii/${versione}/spese`),
+  pdfSpesaDi: (id, spesa) => scaricaFile(`/collaboratori/${id}/spese/${spesa}/pdf`),
+  ricevutaDi: (id, ricevuta) => scaricaFile(`/collaboratori/${id}/spese/allegati/${ricevuta}`),
 
   // Amministratore
   settori: () => chiama('/settori'),
@@ -125,6 +147,8 @@ export const api = {
   creaSettore: (dati) => chiama('/settori', json('POST', dati)),
   modificaSettore: (id, dati) => chiama(`/settori/${id}`, json('PATCH', dati)),
   eliminaSettore: (id) => chiama(`/settori/${id}`, json('DELETE')),
+  creaTipoSpesa: (nome) => chiama('/tipi-spesa', json('POST', { nome })),
+  modificaTipoSpesa: (id, dati) => chiama(`/tipi-spesa/${id}`, json('PATCH', dati)),
   organizzazione: () => chiama('/organizzazione'),
   modificaOrganizzazione: (dati) => chiama('/organizzazione', json('PATCH', dati)),
   registroModifiche: (salta = 0) => chiama(`/registro-modifiche?salta=${salta}`),

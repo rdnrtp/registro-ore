@@ -9,7 +9,8 @@ const UNITA = ['ore', 'sedute'];
 const MAX_ORE_GIORNO = 24;
 
 // Configurazione dell'organizzazione modificata dall'amministratore: attività,
-// settori, indirizzo di invio, traccia delle modifiche. Le letture per tutti
+// settori, indirizzo di invio, tipi di spesa e modalità del loro invio,
+// traccia delle modifiche. Le letture per tutti
 // (elenco attività e settori) sono in organizzazione.js.
 // Ogni modifica è registrata in audit_log nella stessa transazione.
 function rotteConfigurazione({ pool }) {
@@ -340,11 +341,85 @@ function rotteConfigurazione({ pool }) {
     res.json({ ok: true });
   });
 
+  // ------------------------------------------------------- Tipi di spesa
+  // L'elenco (per tutti) è in spese.js. Non si eliminano: si disattivano, e
+  // le spese già registrate con quel tipo restano com'erano.
+
+  const SELECT_TIPO = 'SELECT id, name AS nome, active AS attivo FROM expense_types WHERE organization_id = $1 AND id = $2';
+
+  async function nomeTipoLibero(db, orgId, nome, tranneId = null) {
+    const { rows } = await db.query(
+      'SELECT 1 FROM expense_types WHERE organization_id = $1 AND lower(name) = lower($2) AND id IS DISTINCT FROM $3',
+      [orgId, nome, tranneId],
+    );
+    if (rows[0]) throw new ErroreHttp(409, `Esiste già un tipo di spesa "${nome}"`);
+  }
+
+  // Corpo: { nome }
+  router.post('/tipi-spesa', soloAdmin, async (req, res) => {
+    const org = req.utente.organizzazioneId;
+    const nome = leggiTesto(req.body?.nome, 'Nome', 60);
+    const id = await transazione(pool, async (client) => {
+      await client.query('SELECT 1 FROM organizations WHERE id = $1 FOR UPDATE', [org]);
+      await nomeTipoLibero(client, org, nome);
+      const { rows } = await client.query(
+        `INSERT INTO expense_types (organization_id, name, sort_order)
+         VALUES ($1, $2, (SELECT COALESCE(max(sort_order), 0) + 1 FROM expense_types WHERE organization_id = $1))
+         RETURNING id`,
+        [org, nome],
+      );
+      await traccia(client, {
+        organizzazioneId: org,
+        utente: req.utente,
+        azione: 'tipo_spesa.creato',
+        tipo: 'tipo_spesa',
+        id: rows[0].id,
+        dettagli: { nome },
+      });
+      return rows[0].id;
+    });
+    res.status(201).json((await pool.query(SELECT_TIPO, [org, id])).rows[0]);
+  });
+
+  // Corpo: { nome?, attivo? }
+  router.patch('/tipi-spesa/:id', soloAdmin, async (req, res) => {
+    if (!isUuid(req.params.id)) throw nonTrovato();
+    const org = req.utente.organizzazioneId;
+    const b = req.body ?? {};
+    if (b.attivo !== undefined && typeof b.attivo !== 'boolean') throw nonValido('Valore di "attivo" non valido');
+    const nome = b.nome === undefined ? undefined : leggiTesto(b.nome, 'Nome', 60);
+    await transazione(pool, async (client) => {
+      await client.query('SELECT 1 FROM organizations WHERE id = $1 FOR UPDATE', [org]);
+      const prima = (await client.query(SELECT_TIPO, [org, req.params.id])).rows[0];
+      if (!prima) throw nonTrovato();
+      const dopo = { nome: nome ?? prima.nome, attivo: b.attivo ?? prima.attivo };
+      if (dopo.nome.toLowerCase() !== prima.nome.toLowerCase()) await nomeTipoLibero(client, org, dopo.nome, prima.id);
+      const diff = differenze({ nome: prima.nome, attivo: prima.attivo }, dopo);
+      if (!Object.keys(diff).length) return;
+      await client.query('UPDATE expense_types SET name = $3, active = $4 WHERE id = $1 AND organization_id = $2', [
+        prima.id,
+        org,
+        dopo.nome,
+        dopo.attivo,
+      ]);
+      await traccia(client, {
+        organizzazioneId: org,
+        utente: req.utente,
+        azione: 'tipo_spesa.modificato',
+        tipo: 'tipo_spesa',
+        id: prima.id,
+        dettagli: { tipo: prima.nome, ...diff },
+      });
+    });
+    res.json((await pool.query(SELECT_TIPO, [org, req.params.id])).rows[0]);
+  });
+
   // ------------------------------------------------------ Organizzazione
 
   const SELECT_ORGANIZZAZIONE = `
     SELECT name AS nome, slug, submission_email AS email_invio, pt_sessions_per_kind AS max_sedute_pt_per_tipo,
-           json_build_object('giorni', reminder_days, 'ultimo_giorno', reminder_last_day, 'ora', reminder_hour) AS promemoria
+           json_build_object('giorni', reminder_days, 'ultimo_giorno', reminder_last_day, 'ora', reminder_hour) AS promemoria,
+           expense_send_mode AS invio_spese
       FROM organizations WHERE id = $1`;
 
   router.get('/organizzazione', soloAdmin, async (req, res) => {
@@ -363,30 +438,42 @@ function rotteConfigurazione({ pool }) {
     return { giorni: [...new Set(giorni)].sort((a, b) => a - b), ultimo_giorno: ultimo, ora };
   }
 
-  // Corpo: { email_invio?, promemoria? }. email_invio = indirizzo a cui si
-  // inviano i file mensili; promemoria = giorni e ora dei promemoria automatici.
+  // Corpo: { email_invio?, promemoria?, invio_spese? }. email_invio =
+  // indirizzo a cui si inviano i file mensili; promemoria = giorni e ora dei
+  // promemoria automatici; invio_spese = 'mese' (le spese partono con l'invio
+  // del mese) oppure 'subito' (ogni spesa appena confermata).
   router.patch('/organizzazione', soloAdmin, async (req, res) => {
     const org = req.utente.organizzazioneId;
     const b = req.body ?? {};
     const email = b.email_invio === undefined ? undefined : leggiEmail(b.email_invio);
     const promemoria = b.promemoria === undefined ? undefined : leggiPromemoria(b.promemoria);
+    if (b.invio_spese !== undefined && !['mese', 'subito'].includes(b.invio_spese)) {
+      throw nonValido('Invio delle spese non valido: "mese" o "subito"');
+    }
     await transazione(pool, async (client) => {
       const { rows } = await client.query(
-        `SELECT submission_email, reminder_days, reminder_last_day, reminder_hour FROM organizations WHERE id = $1 FOR UPDATE`,
+        `SELECT submission_email, reminder_days, reminder_last_day, reminder_hour, expense_send_mode
+           FROM organizations WHERE id = $1 FOR UPDATE`,
         [org],
       );
       const r = rows[0];
       const prima = {
         email_invio: r.submission_email,
         promemoria: { giorni: r.reminder_days, ultimo_giorno: r.reminder_last_day, ora: r.reminder_hour },
+        invio_spese: r.expense_send_mode,
       };
-      const dopo = { email_invio: email ?? prima.email_invio, promemoria: promemoria ?? prima.promemoria };
+      const dopo = {
+        email_invio: email ?? prima.email_invio,
+        promemoria: promemoria ?? prima.promemoria,
+        invio_spese: b.invio_spese ?? prima.invio_spese,
+      };
       const diff = differenze(prima, dopo);
       if (!Object.keys(diff).length) return;
       await client.query(
-        `UPDATE organizations SET submission_email = $2, reminder_days = $3, reminder_last_day = $4, reminder_hour = $5
+        `UPDATE organizations SET submission_email = $2, reminder_days = $3, reminder_last_day = $4, reminder_hour = $5,
+                expense_send_mode = $6
           WHERE id = $1`,
-        [org, dopo.email_invio, dopo.promemoria.giorni, dopo.promemoria.ultimo_giorno, dopo.promemoria.ora],
+        [org, dopo.email_invio, dopo.promemoria.giorni, dopo.promemoria.ultimo_giorno, dopo.promemoria.ora, dopo.invio_spese],
       );
       await traccia(client, { organizzazioneId: org, utente: req.utente, azione: 'organizzazione.modificata', dettagli: diff });
     });

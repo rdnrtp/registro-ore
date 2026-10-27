@@ -1,5 +1,6 @@
 import { numero } from './date.js';
 import { dataOra } from './GestioneUtenti.jsx';
+import { euro } from './Spese.jsx';
 
 const STATI_EMAIL = {
   in_attesa: 'email in partenza',
@@ -21,8 +22,9 @@ function TestoEmail({ email }) {
 // Storico degli invii di un mese: stato attuale e tutte le versioni inviate
 // (dalla più recente), con sostituzioni, riaperture e file da scaricare.
 // io = true nel proprio mese (i testi parlano al collaboratore).
-// onScarica(versione) scarica il file di una versione.
-export default function StatoInvio({ stato, invii, io, onScarica }) {
+// onScarica(versione) scarica il file di una versione, onScaricaSpese(versione)
+// il PDF delle spese partito con lei.
+export default function StatoInvio({ stato, invii, io, onScarica, onScaricaSpese }) {
   if (!invii?.length) return null;
   const ultimo = invii[0];
   const riaperto = stato !== 'inviato';
@@ -67,6 +69,23 @@ export default function StatoInvio({ stato, invii, io, onScarica }) {
             <button type="button" className="piccolo neutro scarica-versione" onClick={() => onScarica(v.versione)}>
               Scarica {v.nome_file}
             </button>
+            {v.spese && (
+              <>
+                <span>
+                  {v.spese.annullate
+                    ? 'Spese: nessuna (annullate quelle inviate prima)'
+                    : `Spese: ${v.spese.numero}, totale ${euro(v.spese.totale_centesimi)}`}
+                </span>
+                <small>
+                  <TestoEmail email={v.spese.email} />
+                </small>
+                {!v.spese.annullate && (
+                  <button type="button" className="piccolo neutro scarica-versione" onClick={() => onScaricaSpese(v.versione)}>
+                    Scarica {v.spese.nome_file}
+                  </button>
+                )}
+              </>
+            )}
           </li>
         ))}
       </ol>

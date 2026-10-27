@@ -81,6 +81,34 @@ const UTENTI = [
   { id: ID(3), nome: 'Luca', cognome: 'Bianchi', email: 'luca@bv.test', ruolo: 'responsabile', attivo: true, esonerato_invio: false, password_impostata: false, invito_scadenza: '2026-10-16T10:00:00Z', settori: [ID(102)] },
 ];
 
+const TIPI_SPESA = ['Pedaggio', 'Carburante', 'Parcheggio', 'Pasto', 'Altro'].map((nome, i) => ({ id: ID(600 + i), nome, attivo: true }));
+const ricevuta = (n, tipo = 'image/jpeg') => ({
+  id: ID(700 + n),
+  tipo,
+  nome: tipo === 'image/jpeg' ? `IMG_${4500 + n}.jpg` : 'fattura_carburante.pdf',
+  dimensione: tipo === 'image/jpeg' ? 284_000 : 96_000,
+  pagine: 1,
+});
+// Spese di ottobre 2026.
+const SPESE = [
+  { id: ID(800), data: '2026-10-07', tipo_id: TIPI_SPESA[0].id, tipo: 'Pedaggio', importo_centesimi: 1250, motivo: 'Gara regionale a Verona con la squadra esordienti', inviata: null, allegati: [ricevuta(1), ricevuta(2)] },
+  { id: ID(801), data: '2026-10-07', tipo_id: TIPI_SPESA[1].id, tipo: 'Carburante', importo_centesimi: 5480, motivo: 'Gara regionale a Verona con la squadra esordienti', inviata: null, allegati: [ricevuta(3, 'application/pdf')] },
+];
+const speseMese = (anno, m) => {
+  const spese = anno === 2026 && m === 10 ? SPESE : [];
+  return {
+    anno,
+    mese: m,
+    modalita: 'mese',
+    spese,
+    totale_centesimi: spese.reduce((t, x) => t + x.importo_centesimi, 0),
+    dimensione_ricevute: spese.length ? 664_000 : 0,
+    limite: 4 * 1024 * 1024 - 96 * 1024,
+  };
+};
+// Immagine di una ricevuta (PNG 1×1 grigio).
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGO4AwAA7ADrEfa9WgAAAABJRU5ErkJggg==', 'base64');
+
 const collaboratore = (u, ore, extra) => ({
   id: u.id,
   nome: u.nome,
@@ -166,7 +194,24 @@ async function apiFinta(page, opzioni = {}) {
         totali: { ore: 80, sedute: 3, sedute_pt: 1 },
         avvisi: { mese_futuro: false, mese_non_finito: true, giorni_mancanti: 17, vuoto: false },
         sostituisce: null,
+        spese: {
+          numero: 2,
+          totale_centesimi: 6730,
+          nome_file: 'Spese_Ottobre_2026_Petris.pdf',
+          dimensione: 702_000,
+          limite: 4 * 1024 * 1024,
+          troppo_grande: false,
+          destinatario: 'segreteria@bv.test',
+          copia: ['andrea@bv.test'],
+          sostituisce: null,
+          annulla: false,
+        },
       });
+    }
+    if (percorso === '/tipi-spesa') return json(TIPI_SPESA);
+    if ((r = m(/^\/mese\/(\d+)\/(\d+)\/spese$/))) return json(speseMese(Number(r[1]), Number(r[2])));
+    if (m(/^\/(collaboratori\/[0-9a-f-]{36}\/)?spese\/allegati\/[0-9a-f-]{36}$/)) {
+      return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
     }
     if (percorso === '/push') return json({ chiave_pubblica: CHIAVE_PUSH, dispositivi: s.dispositiviPush });
     if (percorso === '/avvisi/non-letti') return json({ non_letti: 1, importanti: 0 });
@@ -217,13 +262,14 @@ async function apiFinta(page, opzioni = {}) {
         anno: Number(r[2]),
         mese: Number(r[3]),
         inviato_il: null,
+        spese: SPESE,
         solo_settori_propri: false,
       });
     }
     if (percorso === '/utenti') return json(UTENTI);
     if ((r = m(/^\/utenti\/([0-9a-f-]{36})$/))) return json(UTENTI.find((u) => u.id === r[1]));
     if (percorso === '/organizzazione') {
-      return json({ nome: 'BV', slug: 'bv', email_invio: 'segreteria@bv.test', max_sedute_pt_per_tipo: 27, promemoria: { giorni: [25, 28], ultimo_giorno: true, ora: 9 } });
+      return json({ nome: 'BV', slug: 'bv', email_invio: 'segreteria@bv.test', max_sedute_pt_per_tipo: 27, promemoria: { giorni: [25, 28], ultimo_giorno: true, ora: 9 }, invio_spese: 'mese' });
     }
     if (percorso === '/modello') return json({ versioni: [{ versione: 1, nome_file: 'modello_bv.xlsx', caricato_il: '2026-10-12T10:00:00Z', caricato_da: null }] });
     if (percorso === '/registro-modifiche') {

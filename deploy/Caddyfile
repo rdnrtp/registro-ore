@@ -29,9 +29,10 @@
 		defer
 	}
 
-	# Il modello Excel caricato dall'amministratore (l'API accetta fino a 5 MB).
+	# Foto delle ricevute (l'API accetta fino a 20 MB, poi le riduce) e
+	# modello Excel caricato dall'amministratore (fino a 5 MB).
 	request_body {
-		max_size 6MB
+		max_size 21MB
 	}
 
 	reverse_proxy web:80

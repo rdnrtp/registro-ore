@@ -75,6 +75,45 @@ describe('isolamento tra organizzazioni', () => {
     assert.equal(rows[0].n, 0);
   });
 
+  it('spese, ricevute e tipi di spesa di B rispondono 404', async () => {
+    const collabB = await accedi(app, B.collaboratore.email);
+    const { PDFDocument } = require('pdf-lib');
+    const doc = await PDFDocument.create();
+    doc.addPage();
+    const ricevuta = await collabB
+      .post('/api/spese/allegati')
+      .set('Content-Type', 'application/octet-stream')
+      .send(Buffer.from(await doc.save()));
+    assert.equal(ricevuta.status, 201);
+    const tipoB = (await collabB.get('/api/tipi-spesa')).body[0].id;
+    const spesaB = await collabB
+      .post('/api/spese')
+      .send({ data: '2026-10-02', tipo_id: tipoB, importo_centesimi: 500, motivo: 'Trasferta B', allegati: [ricevuta.body.id] });
+    assert.equal(spesaB.status, 201);
+    const corpo = { data: '2026-10-02', tipo_id: tipoB, importo_centesimi: 1, motivo: 'x', allegati: [ricevuta.body.id] };
+    for (const agente of [adminA, collabA]) {
+      assert.equal((await agente.get(`/api/spese/allegati/${ricevuta.body.id}`)).status, 404);
+      assert.equal((await agente.get(`/api/spese/${spesaB.body.id}/pdf`)).status, 404);
+      assert.equal((await agente.put(`/api/spese/${spesaB.body.id}`).send(corpo)).status, 404);
+      assert.equal((await agente.delete(`/api/spese/${spesaB.body.id}`)).status, 404);
+      assert.equal((await agente.delete(`/api/spese/allegati/${ricevuta.body.id}`)).status, 404);
+      // Tipo e ricevuta di B in una spesa di A: rifiutati.
+      assert.equal((await agente.post('/api/spese').send(corpo)).status, 400);
+    }
+    for (const url of [
+      `/api/collaboratori/${B.collaboratore.id}/mese/2026/10`,
+      `/api/collaboratori/${B.collaboratore.id}/spese/allegati/${ricevuta.body.id}`,
+      `/api/collaboratori/${B.collaboratore.id}/spese/${spesaB.body.id}/pdf`,
+      `/api/collaboratori/${B.collaboratore.id}/mese/2026/10/spese/pdf`,
+      `/api/collaboratori/${B.collaboratore.id}/mese/2026/10/invii/1/spese`,
+    ]) {
+      assert.equal((await adminA.get(url)).status, 404, url);
+    }
+    assert.equal((await adminA.patch(`/api/tipi-spesa/${tipoB}`).send({ attivo: false })).status, 404);
+    assert.ok((await adminA.get('/api/tipi-spesa')).body.every((t) => t.id !== tipoB));
+    assert.equal((await collabB.get('/api/mese/2026/10/spese')).body.spese.length, 1);
+  });
+
   it("l'organizzazione indicata nella richiesta viene ignorata", async () => {
     const tentativi = [
       adminA.get(`/api/attivita?organization_id=${B.id}&org=${B.id}`),

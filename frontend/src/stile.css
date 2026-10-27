@@ -1726,3 +1726,286 @@ a.link-secondario {
 .persona-nome small.push-attive {
   color: var(--colore-conferma);
 }
+
+/* ------------------------------------------------- Spese di trasferta */
+
+.elenco-spese {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.elenco-spese li + li {
+  margin-top: 8px;
+}
+
+.elenco-spese button {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  height: auto;
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 400;
+  background: var(--colore-scheda);
+  color: var(--colore-testo);
+  border: 1px solid var(--colore-bordo);
+}
+
+.spesa-riga {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.spesa-tipo {
+  flex: 1;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.spesa-importo {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.spesa-motivo {
+  color: var(--colore-secondario);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.spesa-ricevute {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.spesa-ricevute img,
+.spesa-ricevute .icona-pdf {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  object-fit: cover;
+  border: 1px solid var(--colore-bordo);
+}
+
+.spesa-ricevute small {
+  flex-basis: 100%;
+}
+
+.icona-pdf {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--colore-errore);
+  background: #fbeaea;
+}
+
+.totale-spese {
+  margin: 12px 0 0;
+}
+
+.vuoto-spese {
+  color: var(--colore-secondario);
+  margin: 12px 0 0;
+}
+
+.comandi-spese {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.comandi-spese button {
+  flex: 1 1 160px;
+}
+
+.form-spesa {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+fieldset.tipi-spesa {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+fieldset.tipi-spesa legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.scelta.a-capo {
+  flex-wrap: wrap;
+}
+
+.scelta.a-capo button {
+  flex: 1 1 30%;
+  padding: 0 8px;
+}
+
+input[aria-invalid='true'] {
+  border-color: var(--colore-errore);
+}
+
+.ricevute {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.elenco-ricevute {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.elenco-ricevute li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--colore-bordo);
+}
+
+button.apri-ricevuta {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: auto;
+  padding: 4px 0;
+  text-align: left;
+  font-weight: 400;
+  background: transparent;
+  color: var(--colore-testo);
+}
+
+.apri-ricevuta img,
+.apri-ricevuta .icona-pdf {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--colore-bordo);
+}
+
+.nome-ricevuta {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.nome-ricevuta small {
+  display: block;
+  color: var(--colore-secondario);
+}
+
+.pulsanti-ricevuta {
+  display: flex;
+  gap: 8px;
+}
+
+/* Il campo file vero è invisibile: si tocca l'etichetta, che sembra un pulsante. */
+label.pulsante-file {
+  position: relative;
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--colore-principale);
+  color: #fff;
+  cursor: pointer;
+}
+
+label.pulsante-file.neutro {
+  background: transparent;
+  color: var(--colore-principale);
+  border: 1px solid var(--colore-principale);
+}
+
+label.pulsante-file:focus-within {
+  outline: 2px solid var(--colore-principale);
+  outline-offset: 2px;
+}
+
+label.pulsante-file input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+button.elimina-spesa {
+  align-self: flex-start;
+}
+
+img.ricevuta-grande {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.riepilogo-spese {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 2px solid var(--colore-bordo);
+}
+
+.riepilogo-spese h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.elenco-tipi-spesa {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.elenco-tipi-spesa li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.elenco-tipi-spesa input {
+  flex: 1;
+  min-width: 0;
+}
+
+.elenco-tipi-spesa li.non-attivo input {
+  color: var(--colore-secondario);
+  text-decoration: line-through;
+}
+
+.riga-nuovo-tipo {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.riga-nuovo-tipo label {
+  flex: 1;
+}

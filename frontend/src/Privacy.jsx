@@ -20,7 +20,8 @@ export default function Privacy() {
         <h1>Informativa sulla privacy</h1>
         <p>
           Questa informativa spiega come vengono trattati i dati personali di chi usa il Registro ore, l&apos;app con cui
-          i collaboratori dell&apos;impianto registrano le ore di lavoro e inviano il riepilogo mensile alla segreteria.
+          i collaboratori dell&apos;impianto registrano le ore di lavoro e le spese di trasferta da rimborsare e le inviano
+          alla segreteria.
         </p>
 
         <h2>1. Titolare del trattamento</h2>
@@ -48,6 +49,14 @@ export default function Privacy() {
             Sono dati di persone diverse dall&apos;utente: <Dc>indicare come i clienti vengono informati</Dc>.
           </li>
           <li>
+            <strong>Spese di trasferta da rimborsare</strong>: data, tipo (per esempio pedaggio o carburante), importo,
+            motivo della trasferta e copie delle ricevute (foto o PDF), con il PDF inviato alla segreteria. Le ricevute
+            possono contenere altri dati personali, per esempio luoghi e orari, la targa del veicolo, il nome
+            dell&apos;esercente o parte dei dati di pagamento. Prima di salvare una foto l&apos;app la riduce e toglie i
+            dati nascosti nel file (per esempio la posizione GPS e il modello del telefono); i PDF sono conservati così come
+            vengono caricati.
+          </li>
+          <li>
             <strong>Dati tecnici e di sicurezza</strong>: la password, conservata solo in forma cifrata non reversibile
             (nessuno, nemmeno l&apos;amministratore, può leggerla); il cookie di sessione; il registro delle azioni
             amministrative (per esempio creazione di utenti, riaperture, modifiche alla configurazione); le email
@@ -62,6 +71,10 @@ export default function Privacy() {
             Registrare le ore e trasmetterle alla segreteria per il calcolo dei compensi: esecuzione del rapporto di
             collaborazione o di lavoro (art. 6, par. 1, lett. b GDPR) e adempimento di obblighi di legge fiscali e
             contributivi (lett. c). <Dc>confermare le basi giuridiche</Dc>
+          </li>
+          <li>
+            Rimborsare le spese di trasferta e conservarne la documentazione: esecuzione del rapporto (lett. b) e
+            adempimento di obblighi di legge fiscali (lett. c). <Dc>confermare le basi giuridiche</Dc>
           </li>
           <li>
             Mandare promemoria di scadenza, solleciti e avvisi della bacheca: organizzazione del lavoro, nell&apos;ambito
@@ -97,6 +110,11 @@ export default function Privacy() {
             all&apos;utente stesso.
           </li>
           <li>
+            Spese e ricevute le vedono solo l&apos;utente e gli amministratori, non i responsabili di settore. Il PDF delle
+            spese viene inviato per email solo alla segreteria, con copia all&apos;utente. Le ricevute si aprono solo
+            dall&apos;app, dopo l&apos;accesso: non hanno un indirizzo pubblico.
+          </li>
+          <li>
             Fornitori che trattano i dati per conto del titolare, come responsabili del trattamento (art. 28 GDPR):
             server <Dc>nome del fornitore e paese del centro dati</Dc>, invio delle email <Dc>nome del fornitore</Dc>,
             copie di sicurezza <Dc>nome del fornitore e paese</Dc>. <Dc>persona che gestisce tecnicamente
@@ -120,6 +138,10 @@ export default function Privacy() {
           <li>
             Ore, sedute e file mensili inviati: <Dc>periodo, per esempio 10 anni dall&apos;invio per gli obblighi
             fiscali</Dc>.
+          </li>
+          <li>
+            Spese, ricevute e PDF delle spese inviati: <Dc>periodo, per esempio 10 anni per la documentazione
+            fiscale</Dc>. Le ricevute caricate ma mai salvate in una spesa vengono cancellate dopo un giorno.
           </li>
           <li>
             Account dell&apos;utente: disattivato alla fine della collaborazione; nome ed email cancellati o resi anonimi
